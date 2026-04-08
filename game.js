@@ -15,6 +15,7 @@ const params = new URLSearchParams(window.location.search);
 
 const state = {
   running: false,
+  paused: false,
   score: 0,
   lives: 3,
   level: 1,
@@ -113,6 +114,7 @@ function startGame() {
   resetLevel(true);
   hideOverlay();
   state.running = true;
+  state.paused = false;
   state.lastTime = performance.now();
 }
 
@@ -131,6 +133,22 @@ function showOverlay(title, text, buttonText) {
 
 function hideOverlay() {
   overlay.classList.add("hidden");
+}
+
+function togglePause() {
+  if (!state.running) return;
+  state.paused = !state.paused;
+  if (state.paused) {
+    showOverlay("Paused", "Press P or Enter to resume.", "Resume");
+  } else {
+    hideOverlay();
+    state.lastTime = performance.now();
+  }
+}
+
+function resumeGame() {
+  if (!state.paused) return;
+  togglePause();
 }
 
 function winLevel() {
@@ -152,7 +170,7 @@ function endGame(victory = false) {
 }
 
 function firePlayerBullet() {
-  if (state.fireCooldown > 0 || !state.running) return;
+  if (state.fireCooldown > 0 || !state.running || state.paused) return;
   state.bullets.push({
     x: state.player.x + state.player.width / 2 - 2,
     y: state.player.y - 14,
@@ -400,7 +418,7 @@ function draw() {
 function updateFrame(dt) {
   updateStars(dt);
 
-  if (state.running) {
+  if (state.running && !state.paused) {
     updatePlayer(dt);
     updateBullets(dt);
     updateAliens(dt);
@@ -421,10 +439,17 @@ function handleKey(event, pressed) {
   if (event.code === "ArrowRight" || event.code === "KeyD") state.keys.right = pressed;
   if (pressed && event.code === "Space") {
     event.preventDefault();
-    firePlayerBullet();
+    if (!state.paused) firePlayerBullet();
   }
-  if (pressed && event.code === "Enter" && !state.running) {
-    startGame();
+  if (pressed && event.code === "KeyP") {
+    togglePause();
+  }
+  if (pressed && event.code === "Enter") {
+    if (state.paused) {
+      resumeGame();
+    } else if (!state.running) {
+      startGame();
+    }
   }
 }
 
@@ -459,6 +484,24 @@ function runSmokeTest() {
   window.__spaceInvadersDebug.step(0.016);
   const afterHit = window.__spaceInvadersDebug.snapshot();
 
+  window.__spaceInvadersDebug.togglePause();
+  const afterPause = window.__spaceInvadersDebug.snapshot();
+
+  // Capture paused-state values before stepping while paused
+  const pausedPlayerX = afterPause.playerX;
+  const pausedAlienBullets = afterPause.alienBullets;
+  const pausedAliveAliens = afterPause.aliveAliens;
+  const pausedAlienPositions = afterPause.alienPositions;
+
+  window.__spaceInvadersDebug.step(0.1);
+  const afterPauseStep = window.__spaceInvadersDebug.snapshot();
+
+  window.__spaceInvadersDebug.resumeGame();
+  const afterResume = window.__spaceInvadersDebug.snapshot();
+
+  window.__spaceInvadersDebug.step(0.1);
+  const afterResumeStep = window.__spaceInvadersDebug.snapshot();
+
   window.__spaceInvadersDebug.forceGameOver();
   const afterGameOver = window.__spaceInvadersDebug.snapshot();
   window.dispatchEvent(new KeyboardEvent("keydown", { code: "Enter" }));
@@ -472,8 +515,23 @@ function runSmokeTest() {
     && afterShot.bullets >= 1
     && afterHit.aliveAliens < afterStart.aliveAliens
     && afterHit.score > afterStart.score
+    && afterPause.paused === true
+    && afterPause.running === true
+    && afterPauseStep.paused === true
+    && afterPauseStep.score === afterPause.score
+    && afterPauseStep.bullets === afterPause.bullets
+    && afterPauseStep.playerX === pausedPlayerX
+    && afterPauseStep.aliveAliens === pausedAliveAliens
+    && afterPauseStep.alienBullets === pausedAlienBullets
+    && JSON.stringify(afterPauseStep.alienPositions) === JSON.stringify(pausedAlienPositions)
+    && afterResume.paused === false
+    && afterResume.running === true
+    && afterResume.score === afterPause.score
+    && afterResume.lives === afterPause.lives
+    && afterResume.level === afterPause.level
     && afterGameOver.running === false
     && afterRestart.running === true
+    && afterRestart.paused === false
     && afterRestart.lives === 3;
 
   const report = {
@@ -483,6 +541,10 @@ function runSmokeTest() {
     afterMove,
     afterShot,
     afterHit,
+    afterPause,
+    afterPauseStep,
+    afterResume,
+    afterResumeStep,
     afterGameOver,
     afterRestart,
   };
@@ -493,7 +555,13 @@ function runSmokeTest() {
 
 window.addEventListener("keydown", (event) => handleKey(event, true));
 window.addEventListener("keyup", (event) => handleKey(event, false));
-startButton.addEventListener("click", startGame);
+startButton.addEventListener("click", () => {
+  if (state.paused) {
+    resumeGame();
+  } else {
+    startGame();
+  }
+});
 
 resetStars();
 resetLevel(true);
@@ -503,6 +571,8 @@ showOverlay("Space Invaders", "Clear four waves of invaders and defend the base.
 window.__spaceInvadersDebug = {
   startGame,
   firePlayerBullet,
+  togglePause,
+  resumeGame,
   step(seconds = 1 / 60) {
     updateFrame(seconds);
     draw();
@@ -519,6 +589,7 @@ window.__spaceInvadersDebug = {
   snapshot() {
     return {
       running: state.running,
+      paused: state.paused,
       score: state.score,
       lives: state.lives,
       level: state.level,
@@ -526,6 +597,7 @@ window.__spaceInvadersDebug = {
       bullets: state.bullets.length,
       alienBullets: state.alienBullets.length,
       aliveAliens: state.aliens.filter((alien) => alien.alive).length,
+      alienPositions: state.aliens.filter((alien) => alien.alive).map((alien) => ({ x: alien.x, y: alien.y })),
       barrierHealth: state.barriers.map((barrier) => barrier.health),
     };
   },

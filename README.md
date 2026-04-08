@@ -7,7 +7,8 @@ Browser-based Space Invaders built to run locally and be served over your LAN.
 - `Left` / `A`: move left
 - `Right` / `D`: move right
 - `Space`: fire
-- `Enter`: restart after game over or victory
+- `P`: pause / resume
+- `Enter`: restart after game over or victory (also resumes when paused)
 
 ## Run Locally
 
