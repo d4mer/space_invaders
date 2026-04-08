@@ -529,6 +529,7 @@ function runSmokeTest() {
   const afterVictory = window.__spaceInvadersDebug.snapshot();
 
   const pass = before.running === false
+    && before.overlayText.includes("Space")
     && afterStart.running === true
     && afterMove.playerX > startX
     && afterShot.bullets >= 1
@@ -592,7 +593,7 @@ startButton.addEventListener("click", () => {
 
 resetStars();
 resetLevel(true);
-showOverlay("Space Invaders", "Clear four waves of invaders and defend the base.", "Start Game");
+showOverlay("Space Invaders", "Clear four waves of invaders, defend the base, and press Space to fire.", "Start Game");
 setStatusChip("ready");
 
 // Expose a minimal debug surface so browser-based smoke checks can verify core gameplay state.
@@ -634,6 +635,7 @@ window.__spaceInvadersDebug = {
       aliveAliens: state.aliens.filter((alien) => alien.alive).length,
       alienPositions: state.aliens.filter((alien) => alien.alive).map((alien) => ({ x: alien.x, y: alien.y })),
       barrierHealth: state.barriers.map((barrier) => barrier.health),
+      overlayText: overlayText.textContent,
       statusChipText: statusChip.textContent,
     };
   },
