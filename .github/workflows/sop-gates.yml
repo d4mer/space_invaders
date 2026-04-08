@@ -1,0 +1,43 @@
+name: SOP Gates
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, labeled, unlabeled]
+
+jobs:
+  sop-gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate PR body sections
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = context.payload.pull_request.body || "";
+            const required = [
+              "Task ID:",
+              "## Risk",
+              "## Acceptance Criteria",
+              "## Test Evidence",
+              "## Security Scan Results",
+              "## Rollback Plan",
+              "## Reviewer Outcome"
+            ];
+            const missing = required.filter((x) => !body.includes(x));
+            if (missing.length) core.setFailed("Missing required PR sections: " + missing.join(", "));
+
+      - name: Require 2 approvals for high risk
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const labels = (pr.labels || []).map((l) => l.name);
+            if (!labels.includes("risk:high")) return;
+            const { data: reviews } = await github.rest.pulls.listReviews({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr.number
+            });
+            const approved = new Set(reviews.filter((r) => r.state === "APPROVED").map((r) => r.user.login));
+            if (approved.size < 2) core.setFailed(`risk:high requires 2 approvals; found ${approved.size}`);
