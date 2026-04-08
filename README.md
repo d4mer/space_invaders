@@ -24,3 +24,7 @@ Then open one of these in a browser:
 - `http://<your-local-ip>:8000`
 
 The script uses Python's built-in HTTP server bound to `0.0.0.0` so other devices on your local network can connect.
+
+## HUD Status
+
+The HUD status chip reflects the current live game state.
