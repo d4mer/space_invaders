@@ -100,6 +100,56 @@ body::before {
   font-size: 1.4rem;
 }
 
+.chip-wrap {
+  display: flex;
+  align-items: center;
+}
+
+.chip {
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.chip--ready {
+  background: rgba(132, 246, 255, 0.18);
+  border: 1px solid rgba(132, 246, 255, 0.45);
+  color: var(--accent);
+}
+
+.chip--playing {
+  background: rgba(132, 246, 255, 0.18);
+  border: 1px solid rgba(132, 246, 255, 0.45);
+  color: var(--accent);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+.chip--paused {
+  background: rgba(255, 184, 108, 0.18);
+  border: 1px solid rgba(255, 184, 108, 0.45);
+  color: #ffb86c;
+}
+
+.chip--gameover {
+  background: rgba(255, 121, 198, 0.18);
+  border: 1px solid rgba(255, 121, 198, 0.45);
+  color: var(--accent-2);
+}
+
+.chip--victory {
+  background: rgba(183, 148, 255, 0.18);
+  border: 1px solid rgba(183, 148, 255, 0.45);
+  color: #b794ff;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
 .game-shell {
   position: relative;
   padding: 18px;

@@ -4,6 +4,7 @@ const ctx = canvas.getContext("2d");
 const scoreNode = document.getElementById("score");
 const livesNode = document.getElementById("lives");
 const levelNode = document.getElementById("level");
+const statusChip = document.getElementById("status-chip");
 const overlay = document.getElementById("overlay");
 const overlayTitle = document.getElementById("overlay-title");
 const overlayText = document.getElementById("overlay-text");
@@ -116,12 +117,18 @@ function startGame() {
   state.running = true;
   state.paused = false;
   state.lastTime = performance.now();
+  setStatusChip("playing");
 }
 
 function syncHud() {
   scoreNode.textContent = String(state.score);
   livesNode.textContent = String(state.lives);
   levelNode.textContent = String(state.level);
+}
+
+function setStatusChip(status) {
+  statusChip.className = "chip chip--" + status;
+  statusChip.textContent = status === "gameover" ? "GAME OVER" : status === "victory" ? "VICTORY" : status.toUpperCase();
 }
 
 function showOverlay(title, text, buttonText) {
@@ -140,9 +147,11 @@ function togglePause() {
   state.paused = !state.paused;
   if (state.paused) {
     showOverlay("Paused", "Press P or Enter to resume.", "Resume");
+    setStatusChip("paused");
   } else {
     hideOverlay();
     state.lastTime = performance.now();
+    setStatusChip("playing");
   }
 }
 
@@ -163,8 +172,10 @@ function winLevel() {
 function endGame(victory = false) {
   state.running = false;
   if (victory) {
+    setStatusChip("victory");
     showOverlay("Sector Cleared", `Final score ${state.score}. Press Enter or Start to play again.`, "Play Again");
   } else {
+    setStatusChip("gameover");
     showOverlay("Base Lost", `Final score ${state.score}. Press Enter or Start to try again.`, "Restart");
   }
 }
@@ -509,6 +520,14 @@ function runSmokeTest() {
   window.__spaceInvadersDebug.step(0.016);
   const afterRestart = window.__spaceInvadersDebug.snapshot();
 
+  // Victory path: advance to level 4, kill all aliens, verify VICTORY state
+  window.__spaceInvadersDebug.winLevel();
+  window.__spaceInvadersDebug.winLevel();
+  window.__spaceInvadersDebug.winLevel();
+  window.__spaceInvadersDebug.killAllAliens();
+  window.__spaceInvadersDebug.step(0.016);
+  const afterVictory = window.__spaceInvadersDebug.snapshot();
+
   const pass = before.running === false
     && afterStart.running === true
     && afterMove.playerX > startX
@@ -532,7 +551,14 @@ function runSmokeTest() {
     && afterGameOver.running === false
     && afterRestart.running === true
     && afterRestart.paused === false
-    && afterRestart.lives === 3;
+    && afterRestart.lives === 3
+    && before.statusChipText === "READY"
+    && afterStart.statusChipText === "PLAYING"
+    && afterPause.statusChipText === "PAUSED"
+    && afterResume.statusChipText === "PLAYING"
+    && afterGameOver.statusChipText === "GAME OVER"
+    && afterRestart.statusChipText === "PLAYING"
+    && afterVictory.statusChipText === "VICTORY";
 
   const report = {
     pass,
@@ -547,6 +573,7 @@ function runSmokeTest() {
     afterResumeStep,
     afterGameOver,
     afterRestart,
+    afterVictory,
   };
 
   document.body.dataset.smoke = pass ? "pass" : "fail";
@@ -566,6 +593,7 @@ startButton.addEventListener("click", () => {
 resetStars();
 resetLevel(true);
 showOverlay("Space Invaders", "Clear four waves of invaders and defend the base.", "Start Game");
+setStatusChip("ready");
 
 // Expose a minimal debug surface so browser-based smoke checks can verify core gameplay state.
 window.__spaceInvadersDebug = {
@@ -583,6 +611,13 @@ window.__spaceInvadersDebug = {
   forceGameOver() {
     endGame(false);
   },
+  forceVictory() {
+    endGame(true);
+  },
+  killAllAliens() {
+    state.aliens.forEach((alien) => { alien.alive = false; });
+  },
+  winLevel,
   spawnTestBullet(x, y) {
     state.bullets.push({ x, y, width: 4, height: 14, speed: 460, spent: false });
   },
@@ -599,6 +634,7 @@ window.__spaceInvadersDebug = {
       aliveAliens: state.aliens.filter((alien) => alien.alive).length,
       alienPositions: state.aliens.filter((alien) => alien.alive).map((alien) => ({ x: alien.x, y: alien.y })),
       barrierHealth: state.barriers.map((barrier) => barrier.health),
+      statusChipText: statusChip.textContent,
     };
   },
 };
