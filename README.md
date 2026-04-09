@@ -4,11 +4,18 @@ Browser-based Space Invaders built to run locally and be served over your LAN.
 
 ## Controls
 
+### Desktop / Keyboard
 - `Left` / `A`: move left
 - `Right` / `D`: move right
 - `Space`: fire
 - `P`: pause / resume
 - `Enter`: restart after game over or victory (also resumes when paused)
+
+### Mobile / Touch
+- On-screen left/right buttons: move ship
+- On-screen fire button: fire weapon
+- Long-press fire button to fire continuously
+- Desktop keyboard controls remain enabled when playing on desktop
 
 ## Run Locally
 

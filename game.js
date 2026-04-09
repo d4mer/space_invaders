@@ -9,6 +9,9 @@ const overlay = document.getElementById("overlay");
 const overlayTitle = document.getElementById("overlay-title");
 const overlayText = document.getElementById("overlay-text");
 const startButton = document.getElementById("start-button");
+const touchLeft = document.querySelector(".touch-left");
+const touchRight = document.querySelector(".touch-right");
+const touchFire = document.querySelector(".touch-fire");
 
 const WIDTH = canvas.width;
 const HEIGHT = canvas.height;
@@ -21,6 +24,7 @@ const state = {
   lives: 3,
   level: 1,
   keys: { left: false, right: false },
+  touch: { left: false, right: false, fire: false },
   player: null,
   bullets: [],
   alienBullets: [],
@@ -192,6 +196,16 @@ function firePlayerBullet() {
   state.fireCooldown = 0.28;
 }
 
+function handleTouchFire() {
+  if (state.touch.fire) return; // prevent rapid-fire on hold
+  if (!state.paused) firePlayerBullet();
+  state.touch.fire = true;
+}
+
+function handleTouchFireEnd() {
+  state.touch.fire = false;
+}
+
 function pickAlienShooter() {
   const living = state.aliens.filter((alien) => alien.alive);
   if (!living.length) return null;
@@ -234,8 +248,8 @@ function updateStars(dt) {
 }
 
 function updatePlayer(dt) {
-  if (state.keys.left) state.player.x -= state.player.speed * dt;
-  if (state.keys.right) state.player.x += state.player.speed * dt;
+  if (state.keys.left || state.touch.left) state.player.x -= state.player.speed * dt;
+  if (state.keys.right || state.touch.right) state.player.x += state.player.speed * dt;
   state.player.x = Math.max(18, Math.min(WIDTH - state.player.width - 18, state.player.x));
   state.fireCooldown = Math.max(0, state.fireCooldown - dt);
 }
@@ -464,6 +478,32 @@ function handleKey(event, pressed) {
   }
 }
 
+// Touch/Pointer input handlers
+function setupTouchControls() {
+  const handleStart = (btn, key) => (e) => {
+    e.preventDefault();
+    btn.classList.add("active");
+    state.touch[key] = true;
+    if (key === "fire") handleTouchFire();
+  };
+
+  const handleEnd = (btn, key) => (e) => {
+    e.preventDefault();
+    btn.classList.remove("active");
+    state.touch[key] = false;
+    if (key === "fire") handleTouchFireEnd();
+  };
+
+  [touchLeft, touchRight, touchFire].forEach((btn) => {
+    if (!btn) return;
+    btn.addEventListener("pointerdown", handleStart(btn, btn.classList.contains("touch-left") ? "left" : btn.classList.contains("touch-right") ? "right" : "fire"));
+    btn.addEventListener("pointerup", handleEnd(btn, btn.classList.contains("touch-left") ? "left" : btn.classList.contains("touch-right") ? "right" : "fire"));
+    btn.addEventListener("pointerleave", handleEnd(btn, btn.classList.contains("touch-left") ? "left" : btn.classList.contains("touch-right") ? "right" : "fire"));
+    btn.addEventListener("touchstart", handleStart(btn, btn.classList.contains("touch-left") ? "left" : btn.classList.contains("touch-right") ? "right" : "fire"), { passive: false });
+    btn.addEventListener("touchend", handleEnd(btn, btn.classList.contains("touch-left") ? "left" : btn.classList.contains("touch-right") ? "right" : "fire"));
+  });
+}
+
 function ensureSmokeReportNode() {
   let node = document.getElementById("smoke-report");
   if (!node) {
@@ -528,6 +568,14 @@ function runSmokeTest() {
   window.__spaceInvadersDebug.step(0.016);
   const afterVictory = window.__spaceInvadersDebug.snapshot();
 
+  // Touch control verification: fire on first tap
+  window.__spaceInvadersDebug.startGame();
+  window.__spaceInvadersDebug.step(0.016);
+  window.__spaceInvadersDebug.setTouchFire(true);
+  window.__spaceInvadersDebug.step(0.016);
+  const afterTouchFire = window.__spaceInvadersDebug.snapshot();
+  window.__spaceInvadersDebug.setTouchFire(false);
+
   const pass = before.running === false
     && before.overlayText.includes("Space")
     && afterStart.running === true
@@ -559,7 +607,8 @@ function runSmokeTest() {
     && afterResume.statusChipText === "PLAYING"
     && afterGameOver.statusChipText === "GAME OVER"
     && afterRestart.statusChipText === "PLAYING"
-    && afterVictory.statusChipText === "VICTORY";
+    && afterVictory.statusChipText === "VICTORY"
+    && afterTouchFire.bullets > afterRestart.bullets;
 
   const report = {
     pass,
@@ -575,6 +624,7 @@ function runSmokeTest() {
     afterGameOver,
     afterRestart,
     afterVictory,
+    afterTouchFire,
   };
 
   document.body.dataset.smoke = pass ? "pass" : "fail";
@@ -622,6 +672,14 @@ window.__spaceInvadersDebug = {
   spawnTestBullet(x, y) {
     state.bullets.push({ x, y, width: 4, height: 14, speed: 460, spent: false });
   },
+  setTouchFire(isPressed) {
+    state.touch.fire = isPressed;
+    if (isPressed) {
+      handleTouchFire();
+    } else {
+      handleTouchFireEnd();
+    }
+  },
   snapshot() {
     return {
       running: state.running,
@@ -637,9 +695,12 @@ window.__spaceInvadersDebug = {
       barrierHealth: state.barriers.map((barrier) => barrier.health),
       overlayText: overlayText.textContent,
       statusChipText: statusChip.textContent,
+      touchState: { left: state.touch.left, right: state.touch.right, fire: state.touch.fire },
     };
   },
 };
+
+setupTouchControls();
 
 requestAnimationFrame((time) => {
   state.lastTime = time;

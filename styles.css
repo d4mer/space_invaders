@@ -238,3 +238,69 @@ button {
     flex: 1;
   }
 }
+
+/* Touch controls for mobile */
+.touch-controls {
+  display: none;
+  padding: 16px;
+  margin-top: 16px;
+}
+
+@media (max-width: 780px) {
+  .touch-controls {
+    display: block;
+  }
+
+  .touch-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .touch-btn {
+    flex: 1;
+    max-width: 120px;
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(138, 196, 255, 0.12);
+    border: 1px solid rgba(138, 196, 255, 0.35);
+    border-radius: 16px;
+    color: var(--accent);
+    cursor: pointer;
+    transition: transform 0.08s, background 0.12s;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .touch-btn svg {
+    width: 34px;
+    height: 34px;
+    stroke: currentColor;
+  }
+
+  .touch-btn:active, .touch-btn.active {
+    transform: scale(0.94);
+    background: rgba(138, 196, 255, 0.24);
+    border-color: rgba(138, 196, 255, 0.55);
+  }
+
+  .touch-fire {
+    background: rgba(255, 121, 198, 0.14);
+    border-color: rgba(255, 121, 198, 0.38);
+    color: var(--accent-2);
+  }
+
+  .touch-fire:active, .touch-fire.active {
+    background: rgba(255, 121, 198, 0.26);
+    border-color: rgba(255, 121, 198, 0.58);
+  }
+}
+
+/* Desktop - hide touch controls */
+@media (min-width: 781px) {
+  .touch-controls {
+    display: none !important;
+  }
+}
