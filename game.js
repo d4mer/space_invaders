@@ -31,6 +31,7 @@ const state = {
   aliens: [],
   stars: [],
   barriers: [],
+  effects: [],
   direction: 1,
   formationSpeed: 38,
   dropDistance: 18,
@@ -95,6 +96,7 @@ function createBarriers() {
     width: 90,
     height: 48,
     health: 100,
+    maxHealth: 100,
   }));
 }
 
@@ -110,6 +112,7 @@ function resetLevel(resetScore = true) {
   createBarriers();
   state.bullets = [];
   state.alienBullets = [];
+  state.effects = [];
   state.fireCooldown = 0;
   syncHud();
 }
@@ -170,6 +173,7 @@ function winLevel() {
   createBarriers();
   state.bullets = [];
   state.alienBullets = [];
+  state.effects = [];
   syncHud();
 }
 
@@ -254,6 +258,16 @@ function updatePlayer(dt) {
   state.fireCooldown = Math.max(0, state.fireCooldown - dt);
 }
 
+function updateEffects(dt) {
+  state.effects = state.effects.filter((effect) => {
+    effect.life -= dt * 2.5;
+    if (effect.type === 'impact') {
+      effect.radius += (effect.maxRadius - effect.radius) * dt * 3;
+    }
+    return effect.life > 0;
+  });
+}
+
 function updateBullets(dt) {
   for (const bullet of state.bullets) bullet.y -= bullet.speed * dt;
   for (const bullet of state.alienBullets) bullet.y += bullet.speed * dt;
@@ -297,7 +311,44 @@ function applyBarrierDamage(projectile, amount) {
   for (const barrier of state.barriers) {
     if (barrier.health <= 0) continue;
     if (rectsIntersect(projectile, barrier)) {
+      const oldHealth = barrier.health;
       barrier.health = Math.max(0, barrier.health - amount);
+      
+      // Create impact effect at hit point
+      const hitX = projectile.x + projectile.width / 2;
+      const hitY = projectile.y + projectile.height / 2;
+      
+      // Determine color based on projectile type
+      const isAlienBullet = state.alienBullets.includes(projectile);
+      const impactColor = isAlienBullet ? '#ff6b8f' : '#f6f87a';
+      
+      // Create impact effect
+      state.effects.push({
+        x: hitX,
+        y: hitY,
+        radius: 3,
+        maxRadius: isAlienBullet ? 18 : 12,
+        life: 1.0,
+        color: impactColor,
+        type: 'impact',
+      });
+      
+      // If barrier health dropped significantly, add debris effect
+      if (oldHealth > 0 && barrier.health === 0) {
+        // Barrier destroyed - create explosion effect
+        for (let i = 0; i < 12; i++) {
+          state.effects.push({
+            x: hitX + (Math.random() - 0.5) * 20,
+            y: hitY + (Math.random() - 0.5) * 10,
+            radius: Math.random() * 4 + 1,
+            maxRadius: 8,
+            life: 0.8 + Math.random() * 0.4,
+            color: '#84f6ff',
+            type: 'debris',
+          });
+        }
+      }
+      
       return true;
     }
   }
@@ -400,13 +451,62 @@ function drawAliens() {
 function drawBarriers() {
   for (const barrier of state.barriers) {
     if (barrier.health <= 0) continue;
-    const alpha = barrier.health / 100;
-    ctx.fillStyle = `rgba(122, 245, 157, ${0.28 + alpha * 0.5})`;
+    
+    const healthRatio = barrier.health / barrier.maxHealth;
+    const alpha = 0.5 + healthRatio * 0.5;
+    
+    // Base barrier body - changes color as health drops
+    let baseColor;
+    if (healthRatio > 0.7) {
+      baseColor = "rgba(122, 245, 157,"; // Healthy - green
+    } else if (healthRatio > 0.4) {
+      baseColor = "rgba(196, 230, 98,"; // Moderate - yellow-green
+    } else if (healthRatio > 0.2) {
+      baseColor = "rgba(255, 194, 92,"; // Damaged - orange
+    } else {
+      baseColor = "rgba(255, 121, 198,"; // Critical - pinkish
+    }
+    
+    ctx.fillStyle = `${baseColor} ${alpha})`;
     ctx.fillRect(barrier.x, barrier.y, barrier.width, barrier.height);
-    ctx.clearRect(barrier.x + 30, barrier.y + 28, 30, 20);
-    ctx.strokeStyle = `rgba(255,255,255,${0.15 + alpha * 0.35})`;
+    
+    // Draw internal structure that degrades with damage
+    if (healthRatio > 0.3) {
+      ctx.clearRect(barrier.x + 30, barrier.y + 28, 30, 20);
+    } else if (healthRatio > 0.1) {
+      // More damage = more sections removed
+      ctx.clearRect(barrier.x + 15, barrier.y + 20, 20, 15);
+      ctx.clearRect(barrier.x + 55, barrier.y + 20, 20, 15);
+    } else {
+      // Near destruction - only small sections remain
+      ctx.clearRect(barrier.x + 10, barrier.y + 15, 15, 10);
+      ctx.clearRect(barrier.x + 65, barrier.y + 15, 15, 10);
+    }
+    
+    // Border that becomes more prominent when damaged
+    const borderColor = healthRatio > 0.5 
+      ? `rgba(255,255,255,${0.2 + healthRatio * 0.3})`
+      : `rgba(255,121,198,${0.4 + (1 - healthRatio) * 0.4})`;
+    
+    ctx.strokeStyle = borderColor;
     ctx.lineWidth = 2;
     ctx.strokeRect(barrier.x, barrier.y, barrier.width, barrier.height);
+    
+    // Add damage cracks/marks for low health
+    if (healthRatio < 0.6) {
+      ctx.strokeStyle = `rgba(0,0,0,${0.2 + (1 - healthRatio) * 0.3})`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      // Draw some crack lines
+      const numCracks = Math.floor((1 - healthRatio) * 6);
+      for (let i = 0; i < numCracks; i++) {
+        const cx = barrier.x + 15 + Math.random() * (barrier.width - 30);
+        const cy = barrier.y + 10 + Math.random() * (barrier.height - 20);
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(cx + (Math.random() - 0.5) * 12, cy + (Math.random() - 0.5) * 12);
+      }
+      ctx.stroke();
+    }
   }
 }
 
@@ -418,6 +518,33 @@ function drawBullets() {
   ctx.fillStyle = "#ff6b8f";
   for (const bullet of state.alienBullets) {
     ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
+  }
+}
+
+function drawEffects() {
+  for (const effect of state.effects) {
+    ctx.save();
+    ctx.globalAlpha = effect.life;
+    ctx.fillStyle = effect.color;
+    
+    if (effect.type === 'impact') {
+      // Round impact effect
+      ctx.beginPath();
+      ctx.arc(effect.x, effect.y, effect.radius, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Add a glow ring for stronger visuals
+      ctx.strokeStyle = effect.color;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(effect.x, effect.y, effect.radius + 2, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (effect.type === 'debris') {
+      // Debris particles - small squares
+      ctx.fillRect(effect.x - effect.radius, effect.y - effect.radius, effect.radius * 2, effect.radius * 2);
+    }
+    
+    ctx.restore();
   }
 }
 
@@ -434,6 +561,7 @@ function draw() {
   ctx.clearRect(0, 0, WIDTH, HEIGHT);
   drawStars();
   drawGround();
+  drawEffects();
   drawBarriers();
   drawAliens();
   drawBullets();
@@ -445,6 +573,7 @@ function updateFrame(dt) {
 
   if (state.running && !state.paused) {
     updatePlayer(dt);
+    updateEffects(dt);
     updateBullets(dt);
     updateAliens(dt);
     handleCollisions();
@@ -531,8 +660,8 @@ function runSmokeTest() {
   window.__spaceInvadersDebug.step(0.016);
   const afterShot = window.__spaceInvadersDebug.snapshot();
 
-  window.__spaceInvadersDebug.spawnTestBullet(120, 108);
-  window.__spaceInvadersDebug.step(0.016);
+  window.__spaceInvadersDebug.spawnTestBullet(120, 560);
+  window.__spaceInvadersDebug.step(0.15);
   const afterHit = window.__spaceInvadersDebug.snapshot();
 
   window.__spaceInvadersDebug.togglePause();
@@ -583,6 +712,8 @@ function runSmokeTest() {
     && afterShot.bullets >= 1
     && afterHit.aliveAliens < afterStart.aliveAliens
     && afterHit.score > afterStart.score
+    && afterHit.effects >= 1
+    && afterHit.barrierHealth < afterStart.barrierHealth
     && afterPause.paused === true
     && afterPause.running === true
     && afterPauseStep.paused === true
@@ -690,6 +821,7 @@ window.__spaceInvadersDebug = {
       playerX: state.player.x,
       bullets: state.bullets.length,
       alienBullets: state.alienBullets.length,
+      effects: state.effects.length,
       aliveAliens: state.aliens.filter((alien) => alien.alive).length,
       alienPositions: state.aliens.filter((alien) => alien.alive).map((alien) => ({ x: alien.x, y: alien.y })),
       barrierHealth: state.barriers.map((barrier) => barrier.health),

@@ -35,3 +35,19 @@ The script uses Python's built-in HTTP server bound to `0.0.0.0` so other device
 ## HUD Status
 
 The HUD status chip reflects the current live game state.
+
+## Visual Feedback
+
+### Barrier Damage Effects
+
+When enemy shots or player bullets hit barriers:
+
+- **Impact Effects**: Visible temporary impact effects appear at the hit point
+- **Barrier Degradation**: Barriers visibly change color and structure as health drops:
+  - **Healthy (70-100%)**: Green barrier with full internal structure
+  - **Moderate (40-70%)**: Yellow-green, with some sections removed
+  - **Damaged (20-40%)**: Orange, with multiple sections removed
+  - **Critical (0-20%)**: Pinkish-red, with only small sections remaining
+- **Barrier Destruction**: When a barrier is destroyed, debris particles explode outward
+
+These effects make it easier to see when barriers are taking damage during active gameplay.
