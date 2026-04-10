@@ -5,6 +5,7 @@ const scoreNode = document.getElementById("score");
 const livesNode = document.getElementById("lives");
 const levelNode = document.getElementById("level");
 const statusChip = document.getElementById("status-chip");
+const effectRack = document.getElementById("effect-rack");
 const overlay = document.getElementById("overlay");
 const overlayTitle = document.getElementById("overlay-title");
 const overlayText = document.getElementById("overlay-text");
@@ -15,6 +16,7 @@ const touchFire = document.querySelector(".touch-fire");
 
 const WIDTH = canvas.width;
 const HEIGHT = canvas.height;
+const DEFAULT_FIRE_COOLDOWN = 0.28;
 const params = new URLSearchParams(window.location.search);
 
 const state = {
@@ -32,12 +34,17 @@ const state = {
   stars: [],
   barriers: [],
   effects: [],
+  powerups: [],
   direction: 1,
   formationSpeed: 38,
   dropDistance: 18,
   fireCooldown: 0,
   alienFireTimer: 0,
   lastTime: 0,
+  powerupEffects: {
+    rapidFire: { active: false, duration: 0, cooldownMod: 0.1 },
+    spreadShot: { active: false, duration: 0 },
+  },
 };
 
 function resetStars() {
@@ -113,8 +120,14 @@ function resetLevel(resetScore = true) {
   state.bullets = [];
   state.alienBullets = [];
   state.effects = [];
+  state.powerups = [];
   state.fireCooldown = 0;
+  state.powerupEffects.rapidFire.active = false;
+  state.powerupEffects.rapidFire.duration = 0;
+  state.powerupEffects.spreadShot.active = false;
+  state.powerupEffects.spreadShot.duration = 0;
   syncHud();
+  syncPowerupHud();
 }
 
 function startGame() {
@@ -131,6 +144,22 @@ function syncHud() {
   scoreNode.textContent = String(state.score);
   livesNode.textContent = String(state.lives);
   levelNode.textContent = String(state.level);
+}
+
+function syncPowerupHud() {
+  const activeEffects = [];
+
+  if (state.powerupEffects.rapidFire.active) {
+    activeEffects.push({ className: "effect-pill effect-pill--rapid-fire", label: "Rapid Fire" });
+  }
+
+  if (state.powerupEffects.spreadShot.active) {
+    activeEffects.push({ className: "effect-pill effect-pill--spread-shot", label: "Spread Shot" });
+  }
+
+  effectRack.innerHTML = activeEffects
+    .map((effect) => `<span class="${effect.className}">${effect.label}</span>`)
+    .join("");
 }
 
 function setStatusChip(status) {
@@ -174,7 +203,13 @@ function winLevel() {
   state.bullets = [];
   state.alienBullets = [];
   state.effects = [];
+  state.powerups = [];
+  state.powerupEffects.rapidFire.active = false;
+  state.powerupEffects.rapidFire.duration = 0;
+  state.powerupEffects.spreadShot.active = false;
+  state.powerupEffects.spreadShot.duration = 0;
   syncHud();
+  syncPowerupHud();
 }
 
 function endGame(victory = false) {
@@ -190,6 +225,13 @@ function endGame(victory = false) {
 
 function firePlayerBullet() {
   if (state.fireCooldown > 0 || !state.running || state.paused) return;
+  
+  // Apply rapid fire powerup (reduces cooldown)
+  const cooldown = state.powerupEffects.rapidFire.active
+    ? state.powerupEffects.rapidFire.cooldownMod
+    : DEFAULT_FIRE_COOLDOWN;
+  
+  // Create main bullet
   state.bullets.push({
     x: state.player.x + state.player.width / 2 - 2,
     y: state.player.y - 14,
@@ -197,7 +239,30 @@ function firePlayerBullet() {
     height: 14,
     speed: 460,
   });
-  state.fireCooldown = 0.28;
+  
+  // Apply spread shot powerup (fire additional angled bullets)
+  if (state.powerupEffects.spreadShot.active) {
+    // Left angled bullet
+    state.bullets.push({
+      x: state.player.x + state.player.width / 2 - 2,
+      y: state.player.y - 14,
+      width: 4,
+      height: 14,
+      speed: 460,
+      vx: -40, // slight left angle
+    });
+    // Right angled bullet
+    state.bullets.push({
+      x: state.player.x + state.player.width / 2 - 2,
+      y: state.player.y - 14,
+      width: 4,
+      height: 14,
+      speed: 460,
+      vx: 40, // slight right angle
+    });
+  }
+  
+  state.fireCooldown = cooldown;
 }
 
 function handleTouchFire() {
@@ -268,10 +333,100 @@ function updateEffects(dt) {
   });
 }
 
+function spawnPowerup(x, y) {
+  // Two powerup types: rapid fire and spread shot
+  const type = Math.random() < 0.5 ? 'rapidFire' : 'spreadShot';
+  
+  state.powerups.push({
+    x: x - 12,
+    y: y,
+    width: 24,
+    height: 24,
+    speed: 120,
+    type: type,
+    collected: false,
+    life: 8.0, // 8 seconds before powerup expires
+    bounceOffset: 0,
+  });
+}
+
+function collectPowerup(powerup) {
+  powerup.collected = true;
+
+  if (powerup.type === 'rapidFire') {
+    state.powerupEffects.rapidFire.active = true;
+    state.powerupEffects.rapidFire.duration = 6.0; // 6 seconds duration
+  } else if (powerup.type === 'spreadShot') {
+    state.powerupEffects.spreadShot.active = true;
+    state.powerupEffects.spreadShot.duration = 6.0; // 6 seconds duration
+  }
+
+  syncPowerupHud();
+}
+
+function updatePowerups(dt) {
+  // Update powerup positions
+  state.powerups = state.powerups.filter((powerup) => {
+    if (powerup.collected) return false;
+    
+    // Move powerup down
+    powerup.y += powerup.speed * dt;
+    
+    // Add bounce animation effect
+    powerup.bounceOffset += dt * 8;
+    powerup.x += Math.sin(powerup.bounceOffset) * 2;
+    
+    // Check if powerup expired
+    powerup.life -= dt;
+    if (powerup.life <= 0) {
+      // Powerup expired - create visual feedback effect
+      state.effects.push({
+        x: powerup.x + powerup.width / 2,
+        y: powerup.y + powerup.height / 2,
+        radius: 10,
+        maxRadius: 20,
+        life: 1.0,
+        color: powerup.type === 'rapidFire' ? '#ffb86c' : '#b794ff',
+        type: 'debris',
+      });
+      return false;
+    }
+    
+    return powerup.y < HEIGHT + 40;
+  });
+}
+
+function updatePowerupEffects(dt) {
+  let changed = false;
+
+  if (state.powerupEffects.rapidFire.active) {
+    state.powerupEffects.rapidFire.duration -= dt;
+    if (state.powerupEffects.rapidFire.duration <= 0) {
+      state.powerupEffects.rapidFire.active = false;
+      state.powerupEffects.rapidFire.duration = 0;
+      changed = true;
+    }
+  }
+
+  if (state.powerupEffects.spreadShot.active) {
+    state.powerupEffects.spreadShot.duration -= dt;
+    if (state.powerupEffects.spreadShot.duration <= 0) {
+      state.powerupEffects.spreadShot.active = false;
+      state.powerupEffects.spreadShot.duration = 0;
+      changed = true;
+    }
+  }
+
+  if (changed) syncPowerupHud();
+}
+
 function updateBullets(dt) {
-  for (const bullet of state.bullets) bullet.y -= bullet.speed * dt;
+  for (const bullet of state.bullets) {
+    bullet.y -= bullet.speed * dt;
+    if (bullet.vx) bullet.x += bullet.vx * dt;
+  }
   for (const bullet of state.alienBullets) bullet.y += bullet.speed * dt;
-  state.bullets = state.bullets.filter((bullet) => bullet.y + bullet.height > 0);
+  state.bullets = state.bullets.filter((bullet) => bullet.y + bullet.height > 0 && bullet.x > -20 && bullet.x < WIDTH + 20);
   state.alienBullets = state.alienBullets.filter((bullet) => bullet.y < HEIGHT + bullet.height);
 }
 
@@ -294,9 +449,20 @@ function updateAliens(dt) {
     for (const alien of state.aliens) {
       if (!alien.alive) continue;
       alien.y += state.dropDistance;
-      if (alien.y + alien.height >= state.player.y) {
-        endGame(false);
-      }
+    }
+  }
+
+  // End the game just before aliens visibly overrun the live barricades.
+  const liveBarriers = state.barriers.filter((barrier) => barrier.health > 0);
+  const defenseLineY = liveBarriers.length
+    ? Math.min(...liveBarriers.map((barrier) => barrier.y)) - 6
+    : state.player.y - 12;
+
+  for (const alien of state.aliens) {
+    if (!alien.alive) continue;
+    if (alien.y + alien.height >= defenseLineY) {
+      endGame(false);
+      return;
     }
   }
 
@@ -369,6 +535,11 @@ function handleCollisions() {
         bullet.spent = true;
         state.score += alien.points;
         syncHud();
+        
+        // 15% chance to drop a powerup
+        if (Math.random() < 0.15) {
+          spawnPowerup(alien.x + alien.width / 2, alien.y + alien.height / 2);
+        }
       }
     }
   }
@@ -390,6 +561,16 @@ function handleCollisions() {
       }
     }
   }
+
+  // Check powerup collisions with player
+  for (const powerup of state.powerups) {
+    if (powerup.collected) continue;
+    if (rectsIntersect(state.player, powerup)) {
+      collectPowerup(powerup);
+    }
+  }
+
+  state.powerups = state.powerups.filter((powerup) => !powerup.collected);
 
   state.bullets = state.bullets.filter((bullet) => !bullet.spent);
   state.alienBullets = state.alienBullets.filter((bullet) => !bullet.spent);
@@ -548,6 +729,79 @@ function drawEffects() {
   }
 }
 
+function drawPowerups() {
+  for (const powerup of state.powerups) {
+    if (powerup.collected) continue;
+    
+    ctx.save();
+    ctx.translate(powerup.x + powerup.width / 2, powerup.y + powerup.height / 2);
+    
+    // Pulsing animation for collectible powerups
+    const pulse = Math.sin(powerup.bounceOffset) * 2;
+    const scale = 1 + pulse / 24;
+    ctx.scale(scale, scale);
+    
+    // Draw powerup based on type
+    if (powerup.type === 'rapidFire') {
+      // Rapid fire: orange rounded rectangle with lightning bolt
+      // Use cross-browser-safe approach - manually draw rounded rect
+      ctx.fillStyle = '#ffb86c';
+      ctx.beginPath();
+      const rx = -10, ry = -10, rw = 20, rh = 20, r = 6;
+      ctx.moveTo(rx + r, ry);
+      ctx.lineTo(rx + rw - r, ry);
+      ctx.quadraticCurveTo(rx + rw, ry, rx + rw, ry + r);
+      ctx.lineTo(rx + rw, ry + rh - r);
+      ctx.quadraticCurveTo(rx + rw, ry + rh, rx + rw - r, ry + rh);
+      ctx.lineTo(rx + r, ry + rh);
+      ctx.quadraticCurveTo(rx, ry + rh, rx, ry + rh - r);
+      ctx.lineTo(rx, ry + r);
+      ctx.quadraticCurveTo(rx, ry, rx + r, ry);
+      ctx.closePath();
+      ctx.fill();
+      
+      // Lightning bolt symbol
+      ctx.fillStyle = '#091127';
+      ctx.beginPath();
+      ctx.moveTo(-4, -6);
+      ctx.lineTo(4, -6);
+      ctx.lineTo(-2, 2);
+      ctx.lineTo(2, 2);
+      ctx.lineTo(-4, 8);
+      ctx.lineTo(-4, -6);
+      ctx.fill();
+    } else if (powerup.type === 'spreadShot') {
+      // Spread shot: purple rounded rectangle with three bullets
+      // Use cross-browser-safe approach - manually draw rounded rect
+      ctx.fillStyle = '#b794ff';
+      ctx.beginPath();
+      const rx = -10, ry = -10, rw = 20, rh = 20, r = 6;
+      ctx.moveTo(rx + r, ry);
+      ctx.lineTo(rx + rw - r, ry);
+      ctx.quadraticCurveTo(rx + rw, ry, rx + rw, ry + r);
+      ctx.lineTo(rx + rw, ry + rh - r);
+      ctx.quadraticCurveTo(rx + rw, ry + rh, rx + rw - r, ry + rh);
+      ctx.lineTo(rx + r, ry + rh);
+      ctx.quadraticCurveTo(rx, ry + rh, rx, ry + rh - r);
+      ctx.lineTo(rx, ry + r);
+      ctx.quadraticCurveTo(rx, ry, rx + r, ry);
+      ctx.closePath();
+      ctx.fill();
+      
+      // Three bullet symbols
+      ctx.fillStyle = '#091127';
+      // Center bullet
+      ctx.fillRect(-3, -6, 6, 12);
+      // Left bullet
+      ctx.fillRect(-9, -3, 4, 6);
+      // Right bullet
+      ctx.fillRect(5, -3, 4, 6);
+    }
+    
+    ctx.restore();
+  }
+}
+
 function drawGround() {
   ctx.strokeStyle = "rgba(132, 246, 255, 0.35)";
   ctx.lineWidth = 2;
@@ -565,6 +819,7 @@ function draw() {
   drawBarriers();
   drawAliens();
   drawBullets();
+  drawPowerups();
   drawPlayer();
 }
 
@@ -576,8 +831,12 @@ function updateFrame(dt) {
     updateEffects(dt);
     updateBullets(dt);
     updateAliens(dt);
+    updatePowerups(dt);
     handleCollisions();
   }
+  
+  // Update powerup effects expiration
+  updatePowerupEffects(dt);
 }
 
 function tick(time) {
@@ -660,9 +919,14 @@ function runSmokeTest() {
   window.__spaceInvadersDebug.step(0.016);
   const afterShot = window.__spaceInvadersDebug.snapshot();
 
+  const targetAlien = afterShot.alienPositions[0];
+  window.__spaceInvadersDebug.spawnTestBullet(targetAlien.x + 17, targetAlien.y + 34);
+  window.__spaceInvadersDebug.step(0.08);
+  const afterAlienHit = window.__spaceInvadersDebug.snapshot();
+
   window.__spaceInvadersDebug.spawnTestBullet(120, 560);
   window.__spaceInvadersDebug.step(0.15);
-  const afterHit = window.__spaceInvadersDebug.snapshot();
+  const afterBarrierHit = window.__spaceInvadersDebug.snapshot();
 
   window.__spaceInvadersDebug.togglePause();
   const afterPause = window.__spaceInvadersDebug.snapshot();
@@ -689,7 +953,20 @@ function runSmokeTest() {
   window.__spaceInvadersDebug.step(0.016);
   const afterRestart = window.__spaceInvadersDebug.snapshot();
 
+  // Alien overrun test: move aliens down to barricade line and verify GAME OVER
+  window.__spaceInvadersDebug.startGame();
+  window.__spaceInvadersDebug.step(0.016);
+  // Move aliens down to the barricade line (HEIGHT - 150)
+  // Aliens start at y=90 with height=26, so we need to move them down enough
+  // The barricade is at HEIGHT - 150 = 650 - 150 = 500 (for 684 height)
+  // Let's move them to y = 474 ( HEIGHT - 150 - alien height)
+  window.__spaceInvadersDebug.moveAliensDown(400);
+  window.__spaceInvadersDebug.step(0.016);
+  const afterAlienOverrun = window.__spaceInvadersDebug.snapshot();
+
   // Victory path: advance to level 4, kill all aliens, verify VICTORY state
+  window.__spaceInvadersDebug.startGame();
+  window.__spaceInvadersDebug.step(0.016);
   window.__spaceInvadersDebug.winLevel();
   window.__spaceInvadersDebug.winLevel();
   window.__spaceInvadersDebug.winLevel();
@@ -705,15 +982,43 @@ function runSmokeTest() {
   const afterTouchFire = window.__spaceInvadersDebug.snapshot();
   window.__spaceInvadersDebug.setTouchFire(false);
 
+  // Powerup collection and expiry verification using real collision handling.
+  window.__spaceInvadersDebug.startGame();
+  window.__spaceInvadersDebug.step(0.016);
+  const powerupPlayer = window.__spaceInvadersDebug.snapshot();
+
+  window.__spaceInvadersDebug.spawnTestPowerup(powerupPlayer.playerX + 27, powerupPlayer.playerY, 'rapidFire');
+  window.__spaceInvadersDebug.step(0.016);
+  const afterRapidFireCollection = window.__spaceInvadersDebug.snapshot();
+  window.__spaceInvadersDebug.firePlayerBullet();
+  window.__spaceInvadersDebug.step(0.11);
+  window.__spaceInvadersDebug.firePlayerBullet();
+  const afterRapidFireBurst = window.__spaceInvadersDebug.snapshot();
+  window.__spaceInvadersDebug.forceGameOver();
+  window.__spaceInvadersDebug.step(6.1);
+  const afterRapidFireExpiration = window.__spaceInvadersDebug.snapshot();
+
+  window.__spaceInvadersDebug.startGame();
+  window.__spaceInvadersDebug.step(0.016);
+  const spreadShotPlayer = window.__spaceInvadersDebug.snapshot();
+  window.__spaceInvadersDebug.spawnTestPowerup(spreadShotPlayer.playerX + 27, spreadShotPlayer.playerY, 'spreadShot');
+  window.__spaceInvadersDebug.step(0.016);
+  const afterSpreadShotCollection = window.__spaceInvadersDebug.snapshot();
+  window.__spaceInvadersDebug.firePlayerBullet();
+  const afterSpreadShotVolley = window.__spaceInvadersDebug.snapshot();
+  window.__spaceInvadersDebug.forceGameOver();
+  window.__spaceInvadersDebug.step(6.1);
+  const afterSpreadShotExpiration = window.__spaceInvadersDebug.snapshot();
+
   const pass = before.running === false
     && before.overlayText.includes("Space")
     && afterStart.running === true
     && afterMove.playerX > startX
     && afterShot.bullets >= 1
-    && afterHit.aliveAliens < afterStart.aliveAliens
-    && afterHit.score > afterStart.score
-    && afterHit.effects >= 1
-    && afterHit.barrierHealth < afterStart.barrierHealth
+    && afterAlienHit.aliveAliens < afterShot.aliveAliens
+    && afterAlienHit.score > afterShot.score
+    && afterBarrierHit.effects >= afterAlienHit.effects + 1
+    && afterBarrierHit.barrierHealthTotal < afterAlienHit.barrierHealthTotal
     && afterPause.paused === true
     && afterPause.running === true
     && afterPauseStep.paused === true
@@ -739,7 +1044,23 @@ function runSmokeTest() {
     && afterGameOver.statusChipText === "GAME OVER"
     && afterRestart.statusChipText === "PLAYING"
     && afterVictory.statusChipText === "VICTORY"
-    && afterTouchFire.bullets > afterRestart.bullets;
+    && afterTouchFire.bullets > afterRestart.bullets
+    && afterRapidFireCollection.powerups === 0
+    && afterRapidFireCollection.powerupEffects.rapidFire === true
+    && afterRapidFireCollection.effectRackText.includes("Rapid Fire")
+    && afterRapidFireBurst.bullets >= afterRapidFireCollection.bullets + 2
+    && afterRapidFireExpiration.powerupEffects.rapidFire === false
+    && !afterRapidFireExpiration.effectRackText.includes("Rapid Fire")
+    && afterRapidFireExpiration.powerups === 0
+    && afterSpreadShotCollection.powerups === 0
+    && afterSpreadShotCollection.powerupEffects.spreadShot === true
+    && afterSpreadShotCollection.effectRackText.includes("Spread Shot")
+    && afterSpreadShotVolley.bullets >= afterSpreadShotCollection.bullets + 3
+    && afterSpreadShotExpiration.powerupEffects.spreadShot === false
+    && !afterSpreadShotExpiration.effectRackText.includes("Spread Shot")
+    && afterSpreadShotExpiration.powerups === 0
+    && afterAlienOverrun.running === false
+    && afterAlienOverrun.statusChipText === "GAME OVER";
 
   const report = {
     pass,
@@ -747,7 +1068,8 @@ function runSmokeTest() {
     afterStart,
     afterMove,
     afterShot,
-    afterHit,
+    afterAlienHit,
+    afterBarrierHit,
     afterPause,
     afterPauseStep,
     afterResume,
@@ -756,6 +1078,13 @@ function runSmokeTest() {
     afterRestart,
     afterVictory,
     afterTouchFire,
+    afterAlienOverrun,
+    afterRapidFireCollection,
+    afterRapidFireBurst,
+    afterRapidFireExpiration,
+    afterSpreadShotCollection,
+    afterSpreadShotVolley,
+    afterSpreadShotExpiration,
   };
 
   document.body.dataset.smoke = pass ? "pass" : "fail";
@@ -796,6 +1125,12 @@ window.__spaceInvadersDebug = {
   forceVictory() {
     endGame(true);
   },
+  moveAliensDown(distance) {
+    for (const alien of state.aliens) {
+      if (!alien.alive) continue;
+      alien.y += distance;
+    }
+  },
   killAllAliens() {
     state.aliens.forEach((alien) => { alien.alive = false; });
   },
@@ -803,12 +1138,61 @@ window.__spaceInvadersDebug = {
   spawnTestBullet(x, y) {
     state.bullets.push({ x, y, width: 4, height: 14, speed: 460, spent: false });
   },
+  spawnTestPowerup(x, y, type) {
+    // type: 'rapidFire' or 'spreadShot'
+    state.powerups.push({
+      x: x - 12,
+      y: y,
+      width: 24,
+      height: 24,
+      speed: 120,
+      type: type || 'rapidFire',
+      collected: false,
+      life: 8.0,
+      bounceOffset: 0,
+    });
+  },
+  activatePowerup(type) {
+    // type: 'rapidFire' or 'spreadShot'
+    if (type === 'rapidFire') {
+      state.powerupEffects.rapidFire.active = true;
+      state.powerupEffects.rapidFire.duration = 6.0;
+    } else if (type === 'spreadShot') {
+      state.powerupEffects.spreadShot.active = true;
+      state.powerupEffects.spreadShot.duration = 6.0;
+    }
+  },
   setTouchFire(isPressed) {
-    state.touch.fire = isPressed;
     if (isPressed) {
       handleTouchFire();
     } else {
       handleTouchFireEnd();
+    }
+  },
+  forceCollectTestPowerup(x, y, type) {
+    // Spawn powerup at player position and immediately collect it
+    const typeStr = type || 'rapidFire';
+    const powerup = {
+      x: x - 12,
+      y: y,
+      width: 24,
+      height: 24,
+      speed: 120,
+      type: typeStr,
+      collected: false,
+      life: 8.0,
+      bounceOffset: 0,
+    };
+    state.powerups.push(powerup);
+    // Mark as collected so it doesn't fall away
+    powerup.collected = true;
+    // Directly activate the effect
+    if (typeStr === 'rapidFire') {
+      state.powerupEffects.rapidFire.active = true;
+      state.powerupEffects.rapidFire.duration = 6.0;
+    } else if (typeStr === 'spreadShot') {
+      state.powerupEffects.spreadShot.active = true;
+      state.powerupEffects.spreadShot.duration = 6.0;
     }
   },
   snapshot() {
@@ -819,14 +1203,22 @@ window.__spaceInvadersDebug = {
       lives: state.lives,
       level: state.level,
       playerX: state.player.x,
+      playerY: state.player.y,
       bullets: state.bullets.length,
       alienBullets: state.alienBullets.length,
       effects: state.effects.length,
+      powerups: state.powerups.length,
+      powerupEffects: {
+        rapidFire: state.powerupEffects.rapidFire.active,
+        spreadShot: state.powerupEffects.spreadShot.active,
+      },
       aliveAliens: state.aliens.filter((alien) => alien.alive).length,
       alienPositions: state.aliens.filter((alien) => alien.alive).map((alien) => ({ x: alien.x, y: alien.y })),
       barrierHealth: state.barriers.map((barrier) => barrier.health),
+      barrierHealthTotal: state.barriers.reduce((total, barrier) => total + barrier.health, 0),
       overlayText: overlayText.textContent,
       statusChipText: statusChip.textContent,
+      effectRackText: effectRack.textContent,
       touchState: { left: state.touch.left, right: state.touch.right, fire: state.touch.fire },
     };
   },

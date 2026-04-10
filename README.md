@@ -51,3 +51,17 @@ When enemy shots or player bullets hit barriers:
 - **Barrier Destruction**: When a barrier is destroyed, debris particles explode outward
 
 These effects make it easier to see when barriers are taking damage during active gameplay.
+
+### Powerup Effects
+
+When powerups drop from destroyed enemies and are collected:
+
+- **Rapid Fire (Orange)**: Reduces fire cooldown to 0.1s for 6 seconds - displayed as lightning bolt icon
+- **Spread Shot (Purple)**: Fires three angled bullets for 6 seconds - displayed as three bullet icons
+
+Powerups:
+- Fall from destruction points with bounce animation
+- Provide immediate visual feedback when collected
+- Automatically expire after 6 seconds
+
+The HUD displays current active effects through visual feedback in-game.

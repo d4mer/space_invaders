@@ -105,6 +105,43 @@ body::before {
   align-items: center;
 }
 
+.effect-rack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.effect-rack:empty {
+  display: none;
+}
+
+.effect-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 84px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.effect-pill--rapid-fire {
+  background: rgba(255, 184, 108, 0.18);
+  border-color: rgba(255, 184, 108, 0.45);
+  color: #ffb86c;
+}
+
+.effect-pill--spread-shot {
+  background: rgba(183, 148, 255, 0.18);
+  border-color: rgba(183, 148, 255, 0.45);
+  color: #d2b8ff;
+}
+
 .chip {
   padding: 6px 14px;
   border-radius: 999px;
@@ -232,10 +269,15 @@ button {
   .stats {
     width: 100%;
     justify-content: space-between;
+    flex-wrap: wrap;
   }
 
   .stats div {
     flex: 1;
+  }
+
+  .effect-rack {
+    width: 100%;
   }
 }
 
