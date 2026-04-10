@@ -6,6 +6,7 @@ const livesNode = document.getElementById("lives");
 const levelNode = document.getElementById("level");
 const statusChip = document.getElementById("status-chip");
 const effectRack = document.getElementById("effect-rack");
+const soundToggle = document.getElementById("sound-toggle");
 const overlay = document.getElementById("overlay");
 const overlayTitle = document.getElementById("overlay-title");
 const overlayText = document.getElementById("overlay-text");
@@ -44,6 +45,12 @@ const state = {
   powerupEffects: {
     rapidFire: { active: false, duration: 0, cooldownMod: 0.1 },
     spreadShot: { active: false, duration: 0 },
+  },
+  audio: {
+    enabled: !params.has("smoke"),
+    context: null,
+    masterGain: null,
+    unlocked: false,
   },
 };
 
@@ -160,6 +167,104 @@ function syncPowerupHud() {
   effectRack.innerHTML = activeEffects
     .map((effect) => `<span class="${effect.className}">${effect.label}</span>`)
     .join("");
+}
+
+function syncSoundToggle() {
+  soundToggle.setAttribute("aria-pressed", state.audio.enabled ? "true" : "false");
+  soundToggle.textContent = state.audio.enabled ? "SOUND ON" : "SOUND OFF";
+}
+
+function ensureAudio() {
+  if (!state.audio.enabled) return null;
+  if (state.audio.context) return state.audio.context;
+
+  const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextCtor) {
+    state.audio.enabled = false;
+    syncSoundToggle();
+    return null;
+  }
+
+  const context = new AudioContextCtor();
+  const masterGain = context.createGain();
+  masterGain.gain.value = 0.07;
+  masterGain.connect(context.destination);
+
+  state.audio.context = context;
+  state.audio.masterGain = masterGain;
+  return context;
+}
+
+function unlockAudio() {
+  if (!state.audio.enabled) return;
+  const context = ensureAudio();
+  if (!context) return;
+  if (context.state === "suspended") context.resume();
+  state.audio.unlocked = true;
+}
+
+function playSound(config) {
+  if (!state.audio.enabled) return;
+  const context = ensureAudio();
+  if (!context || !state.audio.masterGain) return;
+  if (context.state === "suspended") return;
+
+  const now = context.currentTime;
+  const oscillator = context.createOscillator();
+  const gainNode = context.createGain();
+  const filter = context.createBiquadFilter();
+  const duration = config.duration || 0.12;
+
+  oscillator.type = config.type || "triangle";
+  oscillator.frequency.setValueAtTime(config.from, now);
+  oscillator.frequency.exponentialRampToValueAtTime(Math.max(40, config.to || config.from), now + duration);
+
+  filter.type = config.filterType || "lowpass";
+  filter.frequency.setValueAtTime(config.filter || 1800, now);
+  filter.Q.value = config.q || 0.8;
+
+  gainNode.gain.setValueAtTime(0.0001, now);
+  gainNode.gain.exponentialRampToValueAtTime(config.volume || 0.16, now + 0.01);
+  gainNode.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+  oscillator.connect(filter);
+  filter.connect(gainNode);
+  gainNode.connect(state.audio.masterGain);
+
+  oscillator.start(now);
+  oscillator.stop(now + duration + 0.02);
+}
+
+function playPlayerFireSound() {
+  playSound({ type: "square", from: 720, to: 260, duration: 0.08, volume: 0.12, filter: 2400 });
+}
+
+function playAlienFireSound() {
+  playSound({ type: "sawtooth", from: 240, to: 110, duration: 0.12, volume: 0.07, filter: 900 });
+}
+
+function playAlienHitSound() {
+  playSound({ type: "triangle", from: 520, to: 160, duration: 0.14, volume: 0.15, filter: 1800 });
+}
+
+function playBarrierHitSound() {
+  playSound({ type: "square", from: 180, to: 80, duration: 0.06, volume: 0.06, filter: 700 });
+}
+
+function playPowerupSound() {
+  playSound({ type: "triangle", from: 360, to: 880, duration: 0.18, volume: 0.14, filter: 2600 });
+}
+
+function playLoseLifeSound() {
+  playSound({ type: "sawtooth", from: 240, to: 70, duration: 0.22, volume: 0.11, filter: 900 });
+}
+
+function playVictorySound() {
+  playSound({ type: "triangle", from: 440, to: 980, duration: 0.26, volume: 0.14, filter: 2400 });
+}
+
+function playGameOverSound() {
+  playSound({ type: "sawtooth", from: 180, to: 50, duration: 0.3, volume: 0.12, filter: 700 });
 }
 
 function setStatusChip(status) {
