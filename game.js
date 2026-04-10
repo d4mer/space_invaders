@@ -715,108 +715,382 @@ function drawPlayer() {
   const p = state.player;
   ctx.save();
   ctx.translate(p.x, p.y);
-  ctx.fillStyle = "#84f6ff";
-  ctx.fillRect(0, 10, p.width, 12);
+  
+  // Ship body glow/trail effect for modern look
+  const trailGlow = "rgba(132, 246, 255, 0.2)";
+  
+  // Engine exhaust glow at bottom (dynamic based on movement)
+  const isMoving = state.keys.left || state.keys.right || 
+                   state.touch.left || state.touch.right;
+  const flicker = isMoving ? Math.random() * 4 : 0;
+  
+  // Exhaust flame base color with gradient effect
+  ctx.fillStyle = "rgba(255, 180, 100, 0.7)";
   ctx.beginPath();
-  ctx.moveTo(8, 10);
-  ctx.lineTo(p.width / 2, 0);
-  ctx.lineTo(p.width - 8, 10);
+  const flameY = p.height + flicker;
+  for (let i = 0; i < 5; i++) {
+    const flameX = p.width / 2 - 8 + i * 4;
+    ctx.arc(flameX, flameY, 3 + Math.random() * 2, 0, Math.PI * 2);
+  }
+  ctx.fill();
+  
+  // Inner bright exhaust core
+  ctx.fillStyle = "rgba(255, 230, 140, 0.9)";
+  ctx.beginPath();
+  for (let i = 1; i < 3; i++) {
+    const flameX = p.width / 2 - 4 + i * 4;
+    ctx.arc(flameX, flameY - 2, 2 + Math.random(), 0, Math.PI * 2);
+  }
+  ctx.fill();
+  
+  // Main ship body with gradient layering effect
+  const mainColor = "#84f6ff";
+  ctx.fillStyle = mainColor;
+  
+  // Base/platform with shadow effect for depth
+  const baseShadowY = p.height - 4;
+  ctx.fillStyle = "rgba(60, 180, 220, 0.4)";
+  ctx.fillRect(-6, baseShadowY + flicker * 0.5, p.width + 12, 6);
+  
+  // Restore main color for ship body
+  ctx.fillStyle = mainColor;
+  ctx.fillRect(0, 12, p.width, 10); // Base platform
+  
+  // Angular ship body with modern sleek design
+  ctx.beginPath();
+  ctx.moveTo(10, 12); // Start from left side of cockpit area
+  ctx.lineTo(p.width / 2 - 3, 0); // Left wing tip of cockpit
+  ctx.lineTo(p.width / 2 + 3, 0); // Right wing tip of cockpit  
+  ctx.lineTo(p.width - 10, 12); // End at right side
   ctx.closePath();
   ctx.fill();
-  ctx.fillStyle = "#d9ffff";
-  ctx.fillRect(p.width / 2 - 4, 3, 8, 18);
+  
+  // Cockpit highlight for depth (gradient effect)
+  const cockpitGradient = "#d9ffff";
+  ctx.fillStyle = cockpitGradient;
+  
+  // Main vertical highlight strip (simulates metallic sheen)
+  ctx.fillRect(p.width / 2 - 5, 4, 10, 18);
+  
+  // Center bright accent for cockpit window effect
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(p.width / 2 - 3, 6, 6, 10);
+  
+  // Add subtle wing/engine details on sides for modern look
+  ctx.fillStyle = "rgba(132, 246, 255, 0.7)";
+  ctx.fillRect(-3, p.height - 6, 4, 8); // Left wing detail
+  ctx.fillRect(p.width - 1, p.height - 6, 4, 8); // Right wing detail
+  
   ctx.restore();
 }
 
 function drawAliens() {
   for (const alien of state.aliens) {
     if (!alien.alive) continue;
+    
     const palette = ["#ff79c6", "#ffb86c", "#84f6ff", "#7af59d", "#b794ff"];
+    const glowPalette = ["#ffaaee", "#ffd588", "#aaffff", "#bbeecc", "#ddbbff"];
+    
     ctx.save();
     ctx.translate(alien.x, alien.y);
-    ctx.fillStyle = palette[alien.row % palette.length];
+    
+    const color = palette[alien.row % palette.length];
+    const glowColor = glowPalette[alien.row % glowPalette.length];
+    
+    // Add subtle pulsing glow effect based on alien row and time
+    const pulseIntensity = 0.3 + Math.sin(Date.now() / (80 + alien.row * 20)) * 0.15;
+    
+    // Glow halo around each alien (more prominent for top rows)
+    ctx.fillStyle = `rgba(${hexToRgba(glowColor)}, ${pulseIntensity * 0.4})`;
+    ctx.beginPath();
+    ctx.arc(alien.width / 2, alien.height / 2, 
+            Math.max(alien.width, alien.height) * 0.75, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Main body with gradient-like layering
+    ctx.fillStyle = color;
+    
+    // Central core - brighter center effect  
+    const centerX = alien.width / 2;
     ctx.fillRect(4, 6, alien.width - 8, alien.height - 8);
-    ctx.fillRect(0, 10, alien.width, 10);
-    ctx.fillRect(6, 0, 8, 10);
-    ctx.fillRect(alien.width - 14, 0, 8, 10);
-    ctx.clearRect(10, 12, 5, 5);
-    ctx.clearRect(alien.width - 15, 12, 5, 5);
-    ctx.fillRect(8, alien.height - 2, 6, 8);
-    ctx.fillRect(alien.width - 14, alien.height - 2, 6, 8);
+    
+    // Inner highlight for depth (simulates gradient)
+    ctx.fillStyle = `rgba(${hexToRgba(color)}, 0.5)`;
+    const highlightY = alien.height * 0.3;
+    ctx.fillRect(8, 12 + highlightY - alien.height * 0.3, 
+                 alien.width - 16, alien.height * 0.5);
+    
+    // Wing/body sections with modern angular design
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 10, alien.width, 12); // Main body extension
+    ctx.fillRect(6, 0, 8, 14); // Left upper protrusion
+    ctx.fillRect(alien.width - 14, 0, 8, 14); // Right upper protrusion
+    
+    // Eye/visor windows with glowing effect
+    ctx.fillStyle = `rgba(${hexToRgba(glowColor)}, 0.7)`;
+    ctx.fillRect(11, 14, 6, 5); // Left eye area
+    ctx.fillRect(alien.width - 17, 14, 6, 5); // Right eye area
+    
+    // Eye glow centers
+    ctx.fillStyle = `rgba(${hexToRgba(glowColor)}, 1)`;
+    const eyePulse = Math.sin(Date.now() / (60 + alien.row * 15)) > -0.3;
+    if (eyePulse) {
+      ctx.fillRect(12, 15, 4, 3); // Left eye glow
+      ctx.fillRect(alien.width - 16, 15, 4, 3); // Right eye glow
+    }
+    
+    // Leg/feet details with modern styling  
+    ctx.fillStyle = color;
+    ctx.fillRect(8, alien.height - 4, 6, 10); // Left foot
+    ctx.fillRect(alien.width - 14, alien.height - 4, 6, 10); // Right foot
+    
+    // Foot tip accents
+    ctx.fillStyle = `rgba(${hexToRgba(glowColor)}, 0.6)`;
+    ctx.fillRect(9, alien.height + 4, 4, 2); // Left tip
+    ctx.fillRect(alien.width - 13, alien.height + 4, 4, 2); // Right tip
+    
     ctx.restore();
   }
 }
+
+// Helper function to convert hex colors to rgba values for dynamic glow effects
+function hexToRgba(hex) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `${r}, ${g}, ${b}`;
+}
+
+// Cache the helper on window for debugging if needed
+window.__hexToRgba = hexToRgba;
 
 function drawBarriers() {
   for (const barrier of state.barriers) {
     if (barrier.health <= 0) continue;
     
     const healthRatio = barrier.health / barrier.maxHealth;
-    const alpha = 0.5 + healthRatio * 0.5;
     
-    // Base barrier body - changes color as health drops
-    let baseColor;
-    if (healthRatio > 0.7) {
-      baseColor = "rgba(122, 245, 157,"; // Healthy - green
-    } else if (healthRatio > 0.4) {
-      baseColor = "rgba(196, 230, 98,"; // Moderate - yellow-green
-    } else if (healthRatio > 0.2) {
-      baseColor = "rgba(255, 194, 92,"; // Damaged - orange
-    } else {
-      baseColor = "rgba(255, 121, 198,"; // Critical - pinkish
-    }
-    
-    ctx.fillStyle = `${baseColor} ${alpha})`;
-    ctx.fillRect(barrier.x, barrier.y, barrier.width, barrier.height);
-    
-    // Draw internal structure that degrades with damage
-    if (healthRatio > 0.3) {
-      ctx.clearRect(barrier.x + 30, barrier.y + 28, 30, 20);
-    } else if (healthRatio > 0.1) {
-      // More damage = more sections removed
-      ctx.clearRect(barrier.x + 15, barrier.y + 20, 20, 15);
-      ctx.clearRect(barrier.x + 55, barrier.y + 20, 20, 15);
-    } else {
-      // Near destruction - only small sections remain
-      ctx.clearRect(barrier.x + 10, barrier.y + 15, 15, 10);
-      ctx.clearRect(barrier.x + 65, barrier.y + 15, 15, 10);
-    }
-    
-    // Border that becomes more prominent when damaged
-    const borderColor = healthRatio > 0.5 
-      ? `rgba(255,255,255,${0.2 + healthRatio * 0.3})`
-      : `rgba(255,121,198,${0.4 + (1 - healthRatio) * 0.4})`;
-    
-    ctx.strokeStyle = borderColor;
-    ctx.lineWidth = 2;
-    ctx.strokeRect(barrier.x, barrier.y, barrier.width, barrier.height);
-    
-    // Add damage cracks/marks for low health
-    if (healthRatio < 0.6) {
-      ctx.strokeStyle = `rgba(0,0,0,${0.2 + (1 - healthRatio) * 0.3})`;
-      ctx.lineWidth = 1;
+    // Multi-stage visual degradation based on health ratio
+    if (healthRatio > 0.75) {
+      // Healthy state - clean, bright green-blue with glow
+      const baseColor = "rgba(100, 255, 220";
+      ctx.fillStyle = `${baseColor}, 1)`;
+      
+      // Main body with rounded appearance using gradient-like effect
+      const gradWidth = barrier.width;
+      ctx.fillRect(barrier.x, barrier.y + 4, gradWidth, barrier.height - 8);
+      
+      // Inner glow highlight for healthy state
+      ctx.fillStyle = "rgba(150, 255, 240, 0.3)";
+      ctx.fillRect(barrier.x + 8, barrier.y + 12, gradWidth - 16, 8);
+      
+      // Clean border with cyan glow
+      ctx.strokeStyle = "rgba(100, 255, 220, 0.7)";
+      ctx.lineWidth = 3;
+      ctx.strokeRect(barrier.x, barrier.y + 2, gradWidth, barrier.height - 4);
+      
+      // Structural details visible when healthy
+      ctx.fillStyle = "rgba(0, 45, 38, 0.6)";
+      ctx.fillRect(barrier.x + 22, barrier.y + 30, 18, 14);
+      ctx.fillRect(barrier.x + 50, barrier.y + 30, 18, 14);
+      
+    } else if (healthRatio > 0.5) {
+      // Moderately damaged - yellow-green with visible wear
+      const baseColor = "rgba(200, 245, 110";
+      ctx.fillStyle = `${baseColor}, 0.9)`;
+      
+      // Slightly smaller body showing erosion
+      const erosion = (1 - healthRatio) * 8;
+      ctx.fillRect(barrier.x + erosion, barrier.y + 6 + erosion, 
+                   barrier.width - erosion * 2, barrier.height - 10);
+      
+      // Warning highlight stripe
+      ctx.fillStyle = "rgba(255, 200, 80, 0.4)";
+      ctx.fillRect(barrier.x + erosion + 12, barrier.y + 14 + erosion, 
+                   barrier.width - erosion * 2 - 24, 6);
+      
+      // Border showing stress
+      ctx.strokeStyle = "rgba(200, 180, 60, 0.5)";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(barrier.x + erosion, barrier.y + 4 + erosion, 
+                     barrier.width - erosion * 2, barrier.height - 6);
+      
+      // One structural element removed
+      ctx.fillStyle = "rgba(0, 35, 28, 0.7)";
+      ctx.fillRect(barrier.x + erosion + 55, barrier.y + 32 + erosion, 16, 12);
+      
+      // Small crack marks appear
+      ctx.fillStyle = "rgba(80, 60, 20, 0.5)";
       ctx.beginPath();
-      // Draw some crack lines
-      const numCracks = Math.floor((1 - healthRatio) * 6);
-      for (let i = 0; i < numCracks; i++) {
-        const cx = barrier.x + 15 + Math.random() * (barrier.width - 30);
-        const cy = barrier.y + 10 + Math.random() * (barrier.height - 20);
+      for (let i = 0; i < 3; i++) {
+        const crackX = barrier.x + 25 + i * 18;
+        ctx.fillRect(crackX, barrier.y + 36 - (i * 2), 8, 2);
+      }
+      
+    } else if (healthRatio > 0.3) {
+      // Heavily damaged - orange with significant damage
+      const baseColor = "rgba(255, 180, 70";
+      ctx.fillStyle = `${baseColor}, 0.8)`;
+      
+      // More erosion visible
+      const heavyErosion = (1 - healthRatio) * 14;
+      ctx.fillRect(barrier.x + heavyErosion, barrier.y + 8 + heavyErosion * 1.5, 
+                   barrier.width - heavyErosion * 2, barrier.height - 16);
+      
+      // Critical warning flash effect (subtle pulsing)
+      const pulse = Math.sin(Date.now() / 100) * 3;
+      ctx.fillStyle = `rgba(255, ${140 + pulse * 3}, 80, 0.3)`;
+      ctx.fillRect(barrier.x + heavyErosion + 8, barrier.y + 16 + heavyErosion * 1.5, 
+                   barrier.width - heavyErosion * 2 - 16, 8);
+      
+      // Fractured border
+      ctx.strokeStyle = "rgba(255, 100, 40, 0.6)";
+      ctx.lineWidth = 2;
+      
+      // Draw fractured border (skip gaps for crack effect)
+      const segmentLen = 12;
+      const perimeterX = barrier.width - heavyErosion * 2;
+      const perimeterY = barrier.height - 6 - heavyErosion * 1.5;
+      for (let i = 0; i < perimeterX / segmentLen; i++) {
+        if (i % 2 === 0) ctx.strokeRect(barrier.x + heavyErosion + i * segmentLen, barrier.y + 4 + heavyErosion * 1.5, segmentLen - 2, perimeterY);
+      }
+      
+    } else if (healthRatio > 0.15) {
+      // Critical state - red/orange, barely holding together
+      ctx.fillStyle = "rgba(255, 90, 80, 0.7)";
+      
+      // Minimal remaining structure
+      const criticalErosion = (1 - healthRatio) * 20;
+      ctx.fillRect(barrier.x + criticalErosion, barrier.y + 12 + criticalErosion * 2, 
+                   Math.max(20, barrier.width - criticalErosion * 3), barrier.height - 24);
+      
+      // Intense warning glow with pulsing
+      const intensePulse = 0.5 + Math.sin(Date.now() / 60) * 0.3;
+      ctx.fillStyle = `rgba(255, 60, 40, ${intensePulse})`;
+      ctx.fillRect(barrier.x + criticalErosion + 6, barrier.y + 20 + criticalErosion * 2, 
+                   Math.max(8, barrier.width - criticalErosion * 3 - 12), 6);
+      
+      // Heavy crack network
+      ctx.strokeStyle = "rgba(40, 20, 10, 0.8)";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      for (let i = 0; i < 5; i++) {
+        const cx = barrier.x + criticalErosion + Math.random() * (barrier.width - criticalErosion * 2);
+        const cy = barrier.y + Math.random() * (barrier.height - 10);
         ctx.moveTo(cx, cy);
-        ctx.lineTo(cx + (Math.random() - 0.5) * 12, cy + (Math.random() - 0.5) * 12);
+        ctx.lineTo(cx + (Math.random() - 0.5) * 24, cy + Math.random() * 16);
       }
       ctx.stroke();
+      
+    } else {
+      // Near destruction - flickering, barely visible remnants
+      ctx.fillStyle = "rgba(255, 100, 50, 0.4)";
+      const finalErosion = 24 + Math.random() * 8;
+      
+      // Fading remnants with flicker effect
+      const flicker = Math.abs(Math.sin(Date.now() / 30)) > 0.2;
+      if (flicker) {
+        ctx.fillRect(barrier.x + finalErosion, barrier.y + 16 + finalErosion * 2.5, 
+                     Math.max(8, barrier.width - finalErosion * 3), 12);
+      }
+      
+      // Final warning - intense flashing
+      const finalFlash = Math.abs(Math.sin(Date.now() / 20)) > 0.5;
+      if (finalFlash) {
+        ctx.fillStyle = "rgba(255, 180, 60, 0.9)";
+        ctx.fillRect(barrier.x + finalErosion - 2, barrier.y + 14 + finalErosion * 2.5, 
+                     Math.max(16, barrier.width - finalErosion * 3 + 4), 8);
+      }
+    }
+    
+    // Health bar overlay for critical barriers (visible at <40% health)
+    if (healthRatio <= 0.4 && !state.paused) {
+      const barWidth = barrier.width * healthRatio;
+      ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+      ctx.fillRect(barrier.x, barrier.y - 8, barrier.width, 4);
+      ctx.fillStyle = healthRatio > 0.25 ? "#ff8866" : "#ff4433";
+      ctx.fillRect(barrier.x, barrier.y - 8, barWidth, 4);
     }
   }
 }
 
 function drawBullets() {
-  ctx.fillStyle = "#f6f87a";
+  // Player bullets - modern glowing trail effect
   for (const bullet of state.bullets) {
-    ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
+    // Trail glow gradient behind the bullet
+    const trailGradient = ctx;
+    ctx.fillStyle = "rgba(240, 255, 180, 0.3)";
+    ctx.fillRect(bullet.x - 2, bullet.y + bullet.height * 0.3, 
+                 bullet.width + 4, bullet.height * 0.7);
+    
+    // Core bullet with glow halo
+    ctx.fillStyle = "#f8ff66";
+    ctx.fillRect(bullet.x, bullet.y + 2, bullet.width, bullet.height - 4);
+    
+    // Bright center highlight
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(bullet.x + 1, bullet.y + 4, bullet.width - 2, bullet.height / 3);
+    
+    // Outer glow halo effect
+    ctx.fillStyle = "rgba(240, 255, 180, 0.6)";
+    ctx.beginPath();
+    ctx.arc(bullet.x + bullet.width/2, bullet.y - 4, 5, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Bottom sparkle for propulsion effect
+    ctx.fillStyle = "rgba(255, 200, 100, 0.7)";
+    ctx.beginPath();
+    const sparkleY = bullet.y + bullet.height - 2;
+    for (let i = 0; i < 3; i++) {
+      ctx.arc(bullet.x + bullet.width/2 - 4 + i*4, sparkleY + Math.random()*3, 
+              1.5 + Math.random(), 0, Math.PI * 2);
+    }
+    ctx.fill();
   }
-  ctx.fillStyle = "#ff6b8f";
+  
+  // Alien bullets - menacing red with spiral/spike effect
   for (const bullet of state.alienBullets) {
-    ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
+    // Outer darkness trail
+    ctx.fillStyle = "rgba(180, 40, 60, 0.25)";
+    ctx.fillRect(bullet.x - 1, bullet.y + bullet.height * 0.2, 
+                 bullet.width + 2, bullet.height * 0.8);
+    
+    // Main body with gradient effect simulation
+    ctx.fillStyle = "#ff5577";
+    ctx.fillRect(bullet.x, bullet.y + 2, bullet.width, bullet.height - 4);
+    
+    // Inner dark core for menacing look
+    ctx.fillStyle = "#aa2233";
+    ctx.fillRect(bullet.x + 1, bullet.y + 4, bullet.width - 2, bullet.height / 3);
+    
+    // Spiky edges effect using small triangles at corners
+    ctx.fillStyle = "#ff3355";
+    const spikeLen = 4;
+    // Top spikes
+    ctx.beginPath();
+    ctx.moveTo(bullet.x, bullet.y);
+    ctx.lineTo(bullet.x - spikeLen/2, bullet.y - spikeLen);
+    ctx.lineTo(bullet.x + bullet.width + spikeLen/2, bullet.y - spikeLen);
+    ctx.lineTo(bullet.x + bullet.width, bullet.y);
+    ctx.fill();
+    
+    // Bottom glow/sparks for alien energy effect  
+    ctx.fillStyle = "rgba(255, 100, 130, 0.6)";
+    ctx.beginPath();
+    const alienSparkY = bullet.y + bullet.height;
+    for (let i = 0; i < 4; i++) {
+      ctx.arc(bullet.x + bullet.width/2 - 5 + i*3, alienSparkY + Math.random()*4, 
+              1.2 + Math.random() * 0.8, 0, Math.PI * 2);
+    }
+    ctx.fill();
+    
+    // Pulsing glow effect around alien bullet  
+    const pulse = 0.3 + Math.sin(Date.now() / 50) * 0.1;
+    ctx.fillStyle = `rgba(220, 60, 95, ${pulse})`;
+    ctx.beginPath();
+    ctx.arc(bullet.x + bullet.width/2, bullet.y + bullet.height/2, 
+            10, 0, Math.PI * 2);
+    ctx.fill();
   }
 }
 
