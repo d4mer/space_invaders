@@ -138,6 +138,7 @@ function resetLevel(resetScore = true) {
 }
 
 function startGame() {
+  unlockAudio();
   resetStars();
   resetLevel(true);
   hideOverlay();
@@ -285,6 +286,7 @@ function hideOverlay() {
 
 function togglePause() {
   if (!state.running) return;
+  unlockAudio();
   state.paused = !state.paused;
   if (state.paused) {
     showOverlay("Paused", "Press P or Enter to resume.", "Resume");
@@ -302,6 +304,7 @@ function resumeGame() {
 }
 
 function winLevel() {
+  playPowerupSound();
   state.level += 1;
   createAliens(state.level);
   createBarriers();
@@ -319,6 +322,8 @@ function winLevel() {
 
 function endGame(victory = false) {
   state.running = false;
+  if (victory) playVictorySound();
+  else playGameOverSound();
   if (victory) {
     setStatusChip("victory");
     showOverlay("Sector Cleared", `Final score ${state.score}. Press Enter or Start to play again.`, "Play Again");
@@ -330,6 +335,7 @@ function endGame(victory = false) {
 
 function firePlayerBullet() {
   if (state.fireCooldown > 0 || !state.running || state.paused) return;
+  unlockAudio();
   
   // Apply rapid fire powerup (reduces cooldown)
   const cooldown = state.powerupEffects.rapidFire.active
@@ -368,6 +374,7 @@ function firePlayerBullet() {
   }
   
   state.fireCooldown = cooldown;
+  playPlayerFireSound();
 }
 
 function handleTouchFire() {
@@ -405,6 +412,7 @@ function fireAlienBullet() {
     height: 16,
     speed: 220 + state.level * 18,
   });
+  playAlienFireSound();
 }
 
 function rectsIntersect(a, b) {
@@ -467,6 +475,7 @@ function collectPowerup(powerup) {
   }
 
   syncPowerupHud();
+  playPowerupSound();
 }
 
 function updatePowerups(dt) {
@@ -606,8 +615,8 @@ function applyBarrierDamage(projectile, amount) {
       
       // If barrier health dropped significantly, add debris effect
       if (oldHealth > 0 && barrier.health === 0) {
-        // Barrier destroyed - create explosion effect
-        for (let i = 0; i < 12; i++) {
+      // Barrier destroyed - create explosion effect
+      for (let i = 0; i < 12; i++) {
           state.effects.push({
             x: hitX + (Math.random() - 0.5) * 20,
             y: hitY + (Math.random() - 0.5) * 10,
@@ -619,6 +628,8 @@ function applyBarrierDamage(projectile, amount) {
           });
         }
       }
+
+      playBarrierHitSound();
       
       return true;
     }
@@ -640,6 +651,7 @@ function handleCollisions() {
         bullet.spent = true;
         state.score += alien.points;
         syncHud();
+        playAlienHitSound();
         
         // 15% chance to drop a powerup
         if (Math.random() < 0.15) {
@@ -662,6 +674,7 @@ function handleCollisions() {
       if (state.lives <= 0) {
         endGame(false);
       } else {
+        playLoseLifeSound();
         state.player.x = WIDTH / 2 - state.player.width / 2;
       }
     }
@@ -1197,7 +1210,14 @@ function runSmokeTest() {
 }
 
 window.addEventListener("keydown", (event) => handleKey(event, true));
+window.addEventListener("pointerdown", unlockAudio, { passive: true });
+window.addEventListener("touchstart", unlockAudio, { passive: true });
 window.addEventListener("keyup", (event) => handleKey(event, false));
+soundToggle.addEventListener("click", () => {
+  state.audio.enabled = !state.audio.enabled;
+  syncSoundToggle();
+  if (state.audio.enabled) unlockAudio();
+});
 startButton.addEventListener("click", () => {
   if (state.paused) {
     resumeGame();
@@ -1210,6 +1230,7 @@ resetStars();
 resetLevel(true);
 showOverlay("Space Invaders", "Clear four waves of invaders, defend the base, and press Space to fire.", "Start Game");
 setStatusChip("ready");
+syncSoundToggle();
 
 // Expose a minimal debug surface so browser-based smoke checks can verify core gameplay state.
 window.__spaceInvadersDebug = {
