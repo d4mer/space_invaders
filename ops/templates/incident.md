@@ -1,38 +1,47 @@
 # Incident Report
 
-- Incident ID:
-- Severity: SEV0 / SEV1 / SEV2 / SEV3
-- Detected at:
-- Detected by:
-- Status: investigating / mitigating / monitoring / resolved
+- **Incident ID**:
+- **Severity**: critical / high / medium / low
+- **Reported**: 
+- **Resolved**:
 
-## Impact Summary
+## Summary
 
-## Timeline (UTC)
-- T0:
+## Impact
 
-## Suspected Cause
+## Root Cause Analysis
+1. What happened:
+2. Why it happened:
+3. Why detection failed:
 
-## Confirmed Cause
+## Runtime Evidence Gate
+- [ ] Execution commands used for diagnosis
+- [ ] Error logs or output captured
+- [ ] Reproduction steps documented
 
-## Mitigation Actions
-1.
+## Resolution Steps
+1. Immediate fix:
+2. Long-term prevention:
 
-## Security Scan Required
-- [ ] Yes - trigger @security
-- [ ] No
+## Lessons Learned
+1. What went wrong:
+2. How we detected it late:
+3. How to prevent recurrence:
 
-## Rollback
-- Executed: yes / no
+## Verification
+- [ ] Smoke test passes after fix
+- [ ] Runtime evidence gate satisfied
+- [ ] Rollback plan tested (if applicable)
+
+## Files Changed
+
+## Rollback Note
+- Trigger:
 - Method:
 - Owner:
 
-## Validation Evidence
-- Tests:
-- Logs/Metrics:
-- Smoke checks:
-
-## Follow-ups
-- [ ] Permanent fix
-- [ ] Regression tests
-- [ ] SOP/process update
+## Security Scan
+- Invoked: yes / no
+- Risk level scanned:
+- Findings:
+- Cleared: yes / no
