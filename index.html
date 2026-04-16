@@ -19,6 +19,10 @@
             <strong id="score">0</strong>
           </div>
           <div>
+            <span class="label">Best</span>
+            <strong id="best-score">0</strong>
+          </div>
+          <div>
             <span class="label">Lives</span>
             <strong id="lives">3</strong>
           </div>
@@ -26,6 +30,10 @@
             <span class="label">Level</span>
             <strong id="level">1</strong>
           </div>
+          <label class="player-card" for="player-name">
+            <span class="label">Pilot</span>
+            <input id="player-name" class="name-input" type="text" maxlength="12" value="PLAYER 1" autocomplete="nickname" spellcheck="false">
+          </label>
           <div class="chip-wrap">
             <span id="status-chip" class="chip chip--ready">READY</span>
           </div>
@@ -35,7 +43,7 @@
       </section>
 
       <section class="panel game-shell">
-        <canvas id="game" width="900" height="640" aria-label="Space Invaders game board"></canvas>
+        <canvas id="game" width="900" height="640" tabindex="0" aria-label="Space Invaders game board"></canvas>
         <div id="overlay" class="overlay hidden" aria-live="polite">
           <h2 id="overlay-title">Space Invaders</h2>
           <p id="overlay-text">Defend the base, clear every wave, and press Space to fire.</p>
@@ -72,6 +80,10 @@
         <div>
           <h2>Goal</h2>
           <p>Clear all invaders before they reach the bottom. Each level speeds up the formation and increases pressure.</p>
+        </div>
+        <div>
+          <h2>High Scores</h2>
+          <ol id="leaderboard" class="leaderboard" aria-live="polite"></ol>
         </div>
       </section>
     </main>

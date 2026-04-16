@@ -2,15 +2,19 @@ const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
 const scoreNode = document.getElementById("score");
+const bestScoreNode = document.getElementById("best-score");
 const livesNode = document.getElementById("lives");
 const levelNode = document.getElementById("level");
 const statusChip = document.getElementById("status-chip");
 const effectRack = document.getElementById("effect-rack");
 const soundToggle = document.getElementById("sound-toggle");
+const playerNameInput = document.getElementById("player-name");
+const leaderboardNode = document.getElementById("leaderboard");
 const overlay = document.getElementById("overlay");
 const overlayTitle = document.getElementById("overlay-title");
 const overlayText = document.getElementById("overlay-text");
 const startButton = document.getElementById("start-button");
+const gameShell = document.querySelector(".game-shell");
 const touchLeft = document.querySelector(".touch-left");
 const touchRight = document.querySelector(".touch-right");
 const touchFire = document.querySelector(".touch-fire");
@@ -19,11 +23,18 @@ const WIDTH = canvas.width;
 const HEIGHT = canvas.height;
 const DEFAULT_FIRE_COOLDOWN = 0.28;
 const params = new URLSearchParams(window.location.search);
+const DEVICE_PIXEL_RATIO_CAP = 2;
+const HIGH_SCORE_STORAGE_KEY = params.has("smoke") ? "space-invaders-high-scores-smoke" : "space-invaders-high-scores";
+const PLAYER_NAME_STORAGE_KEY = params.has("smoke") ? "space-invaders-player-name-smoke" : "space-invaders-player-name";
+const DEFAULT_PLAYER_NAME = "PLAYER 1";
+const MAX_HIGH_SCORES = 5;
 
 const state = {
   running: false,
   paused: false,
+  playerName: DEFAULT_PLAYER_NAME,
   score: 0,
+  highScores: [],
   lives: 3,
   level: 1,
   keys: { left: false, right: false },
@@ -54,6 +65,140 @@ const state = {
   },
 };
 
+function sanitizePlayerName(name) {
+  return (name || "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9 ]+/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 12) || DEFAULT_PLAYER_NAME;
+}
+
+function savePlayerName() {
+  try {
+    window.localStorage.setItem(PLAYER_NAME_STORAGE_KEY, state.playerName);
+  } catch {
+    // Ignore storage failures and continue with in-memory state.
+  }
+}
+
+function syncPlayerNameInput() {
+  playerNameInput.value = state.playerName;
+}
+
+function setPlayerName(name) {
+  state.playerName = sanitizePlayerName(name);
+  syncPlayerNameInput();
+  savePlayerName();
+}
+
+function loadPlayerName() {
+  try {
+    const storedName = window.localStorage.getItem(PLAYER_NAME_STORAGE_KEY);
+    state.playerName = sanitizePlayerName(storedName || DEFAULT_PLAYER_NAME);
+  } catch {
+    state.playerName = DEFAULT_PLAYER_NAME;
+  }
+  syncPlayerNameInput();
+}
+
+function saveHighScores() {
+  try {
+    window.localStorage.setItem(HIGH_SCORE_STORAGE_KEY, JSON.stringify(state.highScores));
+  } catch {
+    // Ignore storage failures and continue with in-memory leaderboard.
+  }
+}
+
+function renderLeaderboard() {
+  leaderboardNode.replaceChildren();
+
+  if (!state.highScores.length) {
+    const item = document.createElement("li");
+    item.className = "leaderboard-empty";
+    item.textContent = "No scores yet. Defend the base to claim the board.";
+    leaderboardNode.appendChild(item);
+    return;
+  }
+
+  for (const entry of state.highScores) {
+    const item = document.createElement("li");
+    const name = document.createElement("span");
+    const score = document.createElement("span");
+    name.className = "leaderboard-name";
+    score.className = "leaderboard-score";
+    name.textContent = entry.name;
+    score.textContent = String(entry.score);
+    item.append(name, score);
+    leaderboardNode.appendChild(item);
+  }
+}
+
+function syncBestScore() {
+  const bestScore = state.highScores[0]?.score || 0;
+  bestScoreNode.textContent = String(bestScore);
+}
+
+function loadHighScores() {
+  let parsedScores = [];
+
+  try {
+    const rawScores = window.localStorage.getItem(HIGH_SCORE_STORAGE_KEY);
+    parsedScores = rawScores ? JSON.parse(rawScores) : [];
+  } catch {
+    parsedScores = [];
+  }
+
+  state.highScores = Array.isArray(parsedScores)
+    ? parsedScores
+      .filter((entry) => entry && Number.isFinite(entry.score))
+      .map((entry) => ({
+        name: sanitizePlayerName(entry.name),
+        score: Math.max(0, Math.floor(entry.score)),
+      }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, MAX_HIGH_SCORES)
+    : [];
+
+  syncBestScore();
+  renderLeaderboard();
+}
+
+function recordHighScore(score) {
+  if (score <= 0) return null;
+
+  const entry = {
+    name: state.playerName,
+    score: Math.floor(score),
+  };
+
+  state.highScores = [...state.highScores, entry]
+    .sort((a, b) => b.score - a.score)
+    .slice(0, MAX_HIGH_SCORES);
+
+  saveHighScores();
+  syncBestScore();
+  renderLeaderboard();
+
+  const rank = state.highScores.findIndex((highScore) => highScore === entry);
+  return rank === -1 ? null : { entry, rank: rank + 1 };
+}
+
+function resetStoredProfile() {
+  try {
+    window.localStorage.removeItem(HIGH_SCORE_STORAGE_KEY);
+    window.localStorage.removeItem(PLAYER_NAME_STORAGE_KEY);
+  } catch {
+    // Ignore storage failures for smoke mode.
+  }
+
+  state.highScores = [];
+  state.playerName = DEFAULT_PLAYER_NAME;
+  syncPlayerNameInput();
+  syncBestScore();
+  renderLeaderboard();
+}
+
 function resetStars() {
   state.stars = Array.from({ length: 90 }, () => ({
     x: Math.random() * WIDTH,
@@ -61,6 +206,30 @@ function resetStars() {
     r: Math.random() * 1.8 + 0.2,
     speed: Math.random() * 12 + 8,
   }));
+}
+
+function focusGameSurface() {
+  canvas.focus({ preventScroll: true });
+}
+
+function resizeCanvas() {
+  const shellWidth = gameShell.clientWidth - 36;
+  const cssWidth = Math.max(320, Math.min(WIDTH, shellWidth));
+  const cssHeight = cssWidth * (HEIGHT / WIDTH);
+  const dpr = Math.min(window.devicePixelRatio || 1, DEVICE_PIXEL_RATIO_CAP);
+
+  canvas.style.width = cssWidth + "px";
+  canvas.style.height = cssHeight + "px";
+  canvas.width = Math.round(WIDTH * dpr);
+  canvas.height = Math.round(HEIGHT * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+}
+
+function syncTouchControlsVisibility() {
+  const hasCoarsePointer = window.matchMedia("(pointer: coarse)").matches;
+  const canTouch = navigator.maxTouchPoints > 0;
+  document.body.classList.toggle("has-touch-controls", hasCoarsePointer || canTouch);
 }
 
 function createPlayer() {
@@ -138,6 +307,7 @@ function resetLevel(resetScore = true) {
 }
 
 function startGame() {
+  setPlayerName(playerNameInput.value);
   unlockAudio();
   resetStars();
   resetLevel(true);
@@ -152,6 +322,7 @@ function syncHud() {
   scoreNode.textContent = String(state.score);
   livesNode.textContent = String(state.lives);
   levelNode.textContent = String(state.level);
+  syncBestScore();
 }
 
 function syncPowerupHud() {
@@ -278,10 +449,12 @@ function showOverlay(title, text, buttonText) {
   overlayText.textContent = text;
   startButton.textContent = buttonText;
   overlay.classList.remove("hidden");
+  startButton.focus({ preventScroll: true });
 }
 
 function hideOverlay() {
   overlay.classList.add("hidden");
+  focusGameSurface();
 }
 
 function togglePause() {
@@ -322,14 +495,18 @@ function winLevel() {
 
 function endGame(victory = false) {
   state.running = false;
+  const highScoreResult = recordHighScore(state.score);
   if (victory) playVictorySound();
   else playGameOverSound();
+  const leaderboardLine = highScoreResult
+    ? ` ${highScoreResult.entry.name} reached #${highScoreResult.rank} on the board.`
+    : "";
   if (victory) {
     setStatusChip("victory");
-    showOverlay("Sector Cleared", `Final score ${state.score}. Press Enter or Start to play again.`, "Play Again");
+    showOverlay("Sector Cleared", `Final score ${state.score}.${leaderboardLine} Press Enter or Start to play again.`, "Play Again");
   } else {
     setStatusChip("gameover");
-    showOverlay("Base Lost", `Final score ${state.score}. Press Enter or Start to try again.`, "Restart");
+    showOverlay("Base Lost", `Final score ${state.score}.${leaderboardLine} Press Enter or Start to try again.`, "Restart");
   }
 }
 
@@ -360,6 +537,7 @@ function firePlayerBullet() {
       width: 4,
       height: 14,
       speed: 460,
+      isAlien: false,
       vx: -40, // slight left angle
     });
     // Right angled bullet
@@ -369,6 +547,7 @@ function firePlayerBullet() {
       width: 4,
       height: 14,
       speed: 460,
+      isAlien: false,
       vx: 40, // slight right angle
     });
   }
@@ -793,15 +972,6 @@ function drawAliens() {
   }
 }
 
-function drawGround() {
-  ctx.strokeStyle = "rgba(132, 246, 255, 0.35)";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(0, HEIGHT - 34);
-  ctx.lineTo(WIDTH, HEIGHT - 34);
-  ctx.stroke();
-}
-
 // Retro barricade pixel masks for chunked erosion effect (static, no per-frame computation)
 // Each row is a horizontal slice; '#' = solid pixel block, '.' = empty/damaged area
 // Bunker silhouette: wider base with central arch/notch for readability and classic look
@@ -1064,7 +1234,15 @@ function tick(time) {
   requestAnimationFrame(tick);
 }
 
+function isTextEntryTarget(target) {
+  if (!target || !(target instanceof HTMLElement)) return false;
+  return target.tagName === "INPUT"
+    || target.tagName === "TEXTAREA"
+    || target.isContentEditable;
+}
+
 function handleKey(event, pressed) {
+  if (isTextEntryTarget(event.target)) return;
   if (event.code === "ArrowLeft" || event.code === "KeyA") state.keys.left = pressed;
   if (event.code === "ArrowRight" || event.code === "KeyD") state.keys.right = pressed;
   if (pressed && event.code === "Space") {
@@ -1072,6 +1250,9 @@ function handleKey(event, pressed) {
     if (!state.paused) firePlayerBullet();
   }
   if (pressed && event.code === "KeyP") {
+    togglePause();
+  }
+  if (pressed && event.code === "Escape" && (state.running || state.paused)) {
     togglePause();
   }
   if (pressed && event.code === "Enter") {
@@ -1124,6 +1305,8 @@ function runSmokeTest() {
   const reportNode = ensureSmokeReportNode();
   
   try {
+    window.__spaceInvadersDebug.resetStoredProfile();
+    window.__spaceInvadersDebug.setPlayerName("ACE");
     const before = window.__spaceInvadersDebug.snapshot();
     window.__spaceInvadersDebug.startGame();
     const afterStart = window.__spaceInvadersDebug.snapshot();
@@ -1239,6 +1422,8 @@ function runSmokeTest() {
 
     const pass = before.running === false
       && before.overlayText.includes("Space")
+      && before.playerName === "ACE"
+      && before.bestScore === 0
       && afterStart.running === true
       && afterMove.playerX > startX
       && afterShot.bullets >= 1
@@ -1261,6 +1446,8 @@ function runSmokeTest() {
       && afterResume.lives === afterPause.lives
       && afterResume.level === afterPause.level
       && afterGameOver.running === false
+      && afterGameOver.highScores >= 1
+      && afterGameOver.bestScore === afterGameOver.score
       && afterRestart.running === true
       && afterRestart.paused === false
       && afterRestart.lives === 3
@@ -1326,6 +1513,12 @@ window.addEventListener("keydown", (event) => handleKey(event, true));
 window.addEventListener("pointerdown", unlockAudio, { passive: true });
 window.addEventListener("touchstart", unlockAudio, { passive: true });
 window.addEventListener("keyup", (event) => handleKey(event, false));
+playerNameInput.addEventListener("change", () => {
+  setPlayerName(playerNameInput.value);
+});
+playerNameInput.addEventListener("blur", () => {
+  setPlayerName(playerNameInput.value);
+});
 soundToggle.addEventListener("click", () => {
   state.audio.enabled = !state.audio.enabled;
   syncSoundToggle();
@@ -1340,6 +1533,13 @@ startButton.addEventListener("click", () => {
 });
 
 resetStars();
+if (params.has("smoke")) resetStoredProfile();
+else {
+  loadPlayerName();
+  loadHighScores();
+}
+syncTouchControlsVisibility();
+resizeCanvas();
 resetLevel(true);
 showOverlay("Space Invaders", "Clear four waves of invaders, defend the base, and press Space to fire.", "Start Game");
 setStatusChip("ready");
@@ -1434,11 +1634,16 @@ window.__spaceInvadersDebug = {
       state.powerupEffects.spreadShot.duration = 6.0;
     }
   },
+  resetStoredProfile,
+  setPlayerName,
   snapshot() {
     return {
       running: state.running,
       paused: state.paused,
+      playerName: state.playerName,
       score: state.score,
+      bestScore: state.highScores[0]?.score || 0,
+      highScores: state.highScores.length,
       lives: state.lives,
       level: state.level,
       playerX: state.player.x,
@@ -1464,6 +1669,11 @@ window.__spaceInvadersDebug = {
 };
 
 setupTouchControls();
+window.addEventListener("resize", () => {
+  syncTouchControlsVisibility();
+  resizeCanvas();
+  draw();
+});
 
 requestAnimationFrame((time) => {
   state.lastTime = time;
