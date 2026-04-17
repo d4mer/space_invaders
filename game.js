@@ -405,6 +405,14 @@ function playSound(config) {
 
   oscillator.start(now);
   oscillator.stop(now + duration + 0.02);
+
+  // Disconnect nodes after stopping to prevent AudioContext node accumulation.
+  // Stopped nodes that remain connected cause GC pressure and progressive CPU growth.
+  oscillator.onended = () => {
+    oscillator.disconnect();
+    filter.disconnect();
+    gainNode.disconnect();
+  };
 }
 
 function playPlayerFireSound() {
@@ -570,14 +578,17 @@ function pickAlienShooter() {
   const living = state.aliens.filter((alien) => alien.alive);
   if (!living.length) return null;
 
-  const columns = new Map();
-  for (const alien of living) {
+  // Use a plain object instead of Map to avoid allocation overhead.
+  // Track the bottom-most alien per column.
+  const columns = Object.create(null);
+  for (let i = 0; i < living.length; i += 1) {
+    const alien = living[i];
     const key = Math.round(alien.x);
-    const current = columns.get(key);
-    if (!current || alien.y > current.y) columns.set(key, alien);
+    const current = columns[key];
+    if (!current || alien.y > current.y) columns[key] = alien;
   }
 
-  const shooters = Array.from(columns.values());
+  const shooters = Object.values(columns);
   return shooters[Math.floor(Math.random() * shooters.length)] || null;
 }
 
@@ -621,6 +632,10 @@ function updateEffects(dt) {
     effect.life -= dt * 2.5;
     if (effect.type === 'impact') {
       effect.radius += (effect.maxRadius - effect.radius) * dt * 3;
+    } else if (effect.type === 'debris' && effect.vx) {
+      // Move debris particles with velocity
+      effect.x += effect.vx * dt;
+      effect.y += effect.vy * dt;
     }
     return effect.life > 0;
   });
@@ -743,14 +758,17 @@ function updateAliens(dt) {
   }
 
   // End the game just before aliens visibly overrun the live barricades.
-  // Optimization: barriers don't move, so only recompute when a barrier is destroyed
-  const liveBarriers = state.barriers.filter((barrier) => barrier.health > 0);
-  // Optimization: use simple loop instead of spread operator for Math.min
+  // Optimization: use a simple loop instead of filter() to avoid array allocation every frame.
   let minBarrierY = Infinity;
-  for (const barrier of liveBarriers) {
-    if (barrier.y < minBarrierY) minBarrierY = barrier.y;
+  let liveBarrierCount = 0;
+  for (let i = 0; i < state.barriers.length; i += 1) {
+    const barrier = state.barriers[i];
+    if (barrier.health > 0) {
+      liveBarrierCount += 1;
+      if (barrier.y < minBarrierY) minBarrierY = barrier.y;
+    }
   }
-  const defenseLineY = liveBarriers.length
+  const defenseLineY = liveBarrierCount
     ? minBarrierY - 6
     : state.player.y - 12;
 
@@ -851,6 +869,54 @@ function handleCollisions() {
 
     if (rectsIntersect(bullet, state.player)) {
       bullet.spent = true;
+      
+      // Create explosion effect at player position
+      const playerCenterX = state.player.x + state.player.width / 2;
+      const playerCenterY = state.player.y + state.player.height / 2;
+      
+      // Explosion color palette - warm tones for dramatic effect
+      const explosionColors = ['#ff6b35', '#ff9500', '#ffcc00', '#ff6b8f', '#84f6ff'];
+      
+      // Spawn debris particles with velocity for outward spread
+      for (let i = 0; i < 24; i++) {
+        const angle = (i / 24) * Math.PI * 2; // Even distribution around circle
+        const speed = 80 + Math.random() * 120; // Outward velocity
+        const color = explosionColors[Math.floor(Math.random() * explosionColors.length)];
+        
+        state.effects.push({
+          x: playerCenterX,
+          y: playerCenterY,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          radius: Math.random() * 4 + 2,
+          life: 0.5 + Math.random() * 0.5,
+          color: color,
+          type: 'debris',
+        });
+      }
+      
+      // Add central bright flash (impact effect)
+      state.effects.push({
+        x: playerCenterX,
+        y: playerCenterY,
+        radius: 6,
+        maxRadius: 30,
+        life: 0.6,
+        color: '#ffffff',
+        type: 'impact',
+      });
+      
+      // Add secondary orange flash ring
+      state.effects.push({
+        x: playerCenterX,
+        y: playerCenterY,
+        radius: 10,
+        maxRadius: 40,
+        life: 0.4,
+        color: '#ff9500',
+        type: 'impact',
+      });
+      
       state.lives -= 1;
       syncHud();
       if (state.lives <= 0) {
@@ -1119,18 +1185,18 @@ function drawBullets() {
 }
 
 function drawEffects() {
+  // Batch save/restore around the entire effects loop to reduce context switch overhead.
+  ctx.save();
   for (const effect of state.effects) {
-    // Optimization: use globalAlpha directly instead of ctx.save/ctx.restore
-    const prevAlpha = ctx.globalAlpha;
     ctx.globalAlpha = effect.life;
-    
+
     if (effect.type === 'impact') {
       // Round impact effect
       ctx.fillStyle = effect.color;
       ctx.beginPath();
       ctx.arc(effect.x, effect.y, effect.radius, 0, Math.PI * 2);
       ctx.fill();
-      
+
       // Add a glow ring for stronger visuals
       ctx.strokeStyle = effect.color;
       ctx.lineWidth = 1;
@@ -1142,9 +1208,8 @@ function drawEffects() {
       ctx.fillStyle = effect.color;
       ctx.fillRect(effect.x - effect.radius, effect.y - effect.radius, effect.radius * 2, effect.radius * 2);
     }
-    
-    ctx.globalAlpha = prevAlpha;
   }
+  ctx.restore();
 }
 
 function drawPowerups() {
